@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import type { MouseEvent, ReactNode } from "react";
+import type { ChangeEvent, MouseEvent, ReactNode } from "react";
 import {
   Avatar,
   Box,
@@ -45,6 +45,7 @@ import DriveFileMoveOutlinedIcon from "@mui/icons-material/DriveFileMoveOutlined
 import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import ImageOutlinedIcon from "@mui/icons-material/ImageOutlined";
+import InsertDriveFileOutlinedIcon from "@mui/icons-material/InsertDriveFileOutlined";
 import LabelOutlinedIcon from "@mui/icons-material/LabelOutlined";
 import LinkIcon from "@mui/icons-material/Link";
 import MoreHorizIcon from "@mui/icons-material/MoreHoriz";
@@ -58,6 +59,7 @@ import SearchIcon from "@mui/icons-material/Search";
 import SubjectIcon from "@mui/icons-material/Subject";
 import UnarchiveOutlinedIcon from "@mui/icons-material/UnarchiveOutlined";
 import UnfoldLessIcon from "@mui/icons-material/UnfoldLess";
+import UploadFileIcon from "@mui/icons-material/UploadFile";
 import VisibilityIcon from "@mui/icons-material/Visibility";
 import VisibilityOutlinedIcon from "@mui/icons-material/VisibilityOutlined";
 
@@ -66,17 +68,22 @@ import { useNavigate, useParams } from "react-router-dom";
 import { getBoards, saveBoards } from "../utils/boardStorage";
 import type { BoardItem } from "../types/board";
 
-/* ============================================================
- *  TYPES
- * ============================================================ */
-
 type LabelItem = { id: string; name: string; color: string };
 
 type ChecklistItem = { id: number; text: string; done: boolean };
 
 type Checklist = { id: number; title: string; items: ChecklistItem[] };
 
-type AttachmentItem = { id: number; name: string; url: string };
+/* An attachment is either a pasted link or an uploaded file.
+   Uploaded files are stored as a data URL so they survive a refresh. */
+type AttachmentItem = {
+  id: number;
+  name: string;
+  url: string;
+  kind?: "link" | "file";
+  mime?: string;
+  size?: number;
+};
 
 type CommentItem = { id: number; text: string; time: number };
 
@@ -85,12 +92,12 @@ type ActivityItem = { id: number; text: string; time: number; detail: boolean };
 type CardItem = {
   id: number;
   title: string;
-  color?: string; // card cover / background color
+  color?: string; 
   description?: string;
   labels?: LabelItem[];
   members?: string[];
-  startDate?: string; // yyyy-mm-dd
-  dueDate?: string; // yyyy-mm-dd
+  startDate?: string; 
+  dueDate?: string; 
   completed?: boolean;
   checklists?: Checklist[];
   attachments?: AttachmentItem[];
@@ -134,14 +141,13 @@ type PopoverState = {
   cardId: number;
 };
 
-/* Snapshot kept around so an archive/delete can be undone */
+
 type UndoSnapshot = { board: BoardItem; message: string };
 
-/* ============================================================
- *  CONSTANTS
- * ============================================================ */
-
 const CURRENT_USER = "Naga Bindu Narisetti";
+
+/* Uploaded files are kept in browser storage, so keep each one small. */
+const MAX_FILE_SIZE = 2 * 1024 * 1024; // 2 MB
 
 const LIST_COLORS = [
   "#0F766E",
@@ -156,20 +162,19 @@ const LIST_COLORS = [
   "#64748B",
 ];
 
-const DEFAULT_CARD_COLOR = "#22272B";
+const DEFAULT_CARD_COLOR = "#0E1012";
 
-/* Dark card palette (Trello style). First entry is the default. */
 const CARD_COLORS = [
-  "#22272B", // default
-  "#164B35", // green
-  "#533F04", // yellow
-  "#5F3811", // orange
-  "#5D1F1A", // red
-  "#352C63", // purple
-  "#09326C", // blue
-  "#164555", // teal
-  "#50253F", // pink
-  "#454F59", // gray
+  "#0E1012", 
+  "#164B35", 
+  "#533F04", 
+  "#5F3811", 
+  "#5D1F1A", 
+  "#352C63", 
+  "#09326C", 
+  "#164555", 
+  "#50253F", 
+  "#454F59", 
 ];
 
 const LABEL_PALETTE = [
@@ -192,25 +197,25 @@ const DEFAULT_LABELS: LabelItem[] = [
   { id: "d-blue", name: "Info", color: LABEL_PALETTE[5] },
 ];
 
-const CARD_TEXT = "#DEE4EA";
-const CARD_MUTED = "#9FADBC";
+const CARD_TEXT = "#FFFFFF";
+const CARD_MUTED = "#F1F5F9";
 const FOCUS_BLUE = "#579DFF";
-const PANEL_BG = "#282E33";
+const PANEL_BG = "#16181B";
 
 const DEFAULT_BOARD_BACKGROUND =
   "linear-gradient(160deg, #3B2A6B 0%, #7A4A8C 55%, #A24F87 100%)";
 
 const darkButtonSx = {
   textTransform: "none",
-  color: CARD_TEXT,
-  backgroundColor: "rgba(255,255,255,0.08)",
-  border: "1px solid rgba(255,255,255,0.14)",
+  color: "#FFFFFF",
+  backgroundColor: "rgba(255,255,255,0.16)",
+  border: "1px solid rgba(255,255,255,0.3)",
   borderRadius: 1.5,
-  fontWeight: 600,
+  fontWeight: 700,
   fontSize: 14,
   px: 1.5,
   minHeight: 38,
-  "&:hover": { backgroundColor: "rgba(255,255,255,0.16)" },
+  "&:hover": { backgroundColor: "rgba(255,255,255,0.26)" },
 } satisfies SxProps<Theme>;
 
 const primaryButtonSx = {
@@ -259,16 +264,60 @@ const darkFieldSx = {
   "& input[type='date']": { colorScheme: "dark" },
 } satisfies SxProps<Theme>;
 
-/* ============================================================
- *  HELPERS
- * ============================================================ */
+/* ---- card dialog (white side): dark, high-contrast text ---- */
+const L_TEXT = "#0B1220";
+const L_MUTED = "#334155";
 
-/* Unique ids (Date.now() alone collides when copying lists/cards) */
+const lightButtonSx = {
+  textTransform: "none",
+  color: L_TEXT,
+  backgroundColor: "#F1F2F4",
+  border: "1px solid #B6C2CF",
+  borderRadius: 1.5,
+  fontWeight: 700,
+  fontSize: 14,
+  px: 1.5,
+  minHeight: 38,
+  "&:hover": { backgroundColor: "#DCDFE4" },
+} satisfies SxProps<Theme>;
+
+const lightGhostButtonSx = {
+  minHeight: 32,
+  px: 1.25,
+  borderRadius: 1.5,
+  textTransform: "none",
+  fontWeight: 700,
+  color: L_TEXT,
+  "&:hover": { backgroundColor: "rgba(9,30,66,0.08)" },
+} satisfies SxProps<Theme>;
+
+const lightFieldRootSx = {
+  color: L_TEXT,
+  backgroundColor: "#FFFFFF",
+  borderRadius: 1.5,
+  fontSize: 14,
+  alignItems: "flex-start",
+  "& fieldset": { borderColor: "#8590A2" },
+  "&:hover fieldset": { borderColor: FOCUS_BLUE },
+  "&.Mui-focused fieldset": { borderColor: FOCUS_BLUE, borderWidth: 2 },
+};
+
+const lightFieldSx = {
+  "& .MuiOutlinedInput-root": lightFieldRootSx,
+  "& input::placeholder, & textarea::placeholder": {
+    color: L_MUTED,
+    opacity: 1,
+  },
+} satisfies SxProps<Theme>;
+
 const uid = () => Date.now() * 1000 + Math.floor(Math.random() * 1000);
 
-/* Old cards saved as white are treated as the default dark card */
 const resolveCardColor = (color?: string) =>
-  !color || color.toUpperCase() === "#FFFFFF" ? DEFAULT_CARD_COLOR : color;
+  !color ||
+  color.toUpperCase() === "#FFFFFF" ||
+  color.toUpperCase() === "#22272B"
+    ? DEFAULT_CARD_COLOR
+    : color;
 
 const hasCover = (color?: string) =>
   resolveCardColor(color) !== DEFAULT_CARD_COLOR;
@@ -389,7 +438,22 @@ const avatarColorFor = (name: string) => {
 const normalizeUrl = (value: string) =>
   /^https?:\/\//i.test(value) ? value : `https://${value}`;
 
-/* text match used by the search box: title, description, labels, members */
+const formatSize = (bytes?: number) => {
+  if (!bytes && bytes !== 0) return "";
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+};
+
+const readFileAsDataUrl = (file: File) =>
+  new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result));
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(file);
+  });
+
+
 const cardMatchesQuery = (card: CardItem, query: string) => {
   const q = query.trim().toLowerCase();
   if (!q) return true;
@@ -401,9 +465,6 @@ const cardMatchesQuery = (card: CardItem, query: string) => {
   );
 };
 
-/* ============================================================
- *  SMALL PRESENTATIONAL COMPONENTS
- * ============================================================ */
 
 function MemberAvatar({ name, size = 28 }: { name: string; size?: number }) {
   return (
@@ -435,9 +496,9 @@ function SectionHead({
 }) {
   return (
     <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, mb: 1.25 }}>
-      <Box sx={{ color: CARD_MUTED, display: "flex" }}>{icon}</Box>
+      <Box sx={{ color: L_MUTED, display: "flex" }}>{icon}</Box>
       <Typography
-        sx={{ flex: 1, fontSize: 16, fontWeight: 700, color: CARD_TEXT }}
+        sx={{ flex: 1, fontSize: 16, fontWeight: 700, color: L_TEXT }}
       >
         {title}
       </Typography>
@@ -473,26 +534,22 @@ function PopHeader({ title, onClose }: { title: string; onClose: () => void }) {
   );
 }
 
-/* ============================================================
- *  PAGE
- * ============================================================ */
 
 function BoardPage() {
   const navigate = useNavigate();
   const { id } = useParams();
 
-  /* ---------- board data ---------- */
+ 
   const [board, setBoard] = useState<BoardItem | null>(null);
   const boardRef = useRef<BoardItem | null>(null);
 
-  /* ---------- search / filter ---------- */
+
   const [query, setQuery] = useState("");
   const searchInputRef = useRef<HTMLInputElement | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
-  /* ---------- undo (archive / delete) ---------- */
   const [undoSnapshot, setUndoSnapshot] = useState<UndoSnapshot | null>(null);
 
-  /* ---------- lists ---------- */
   const [listMenuAnchor, setListMenuAnchor] = useState<null | HTMLElement>(
     null
   );
@@ -503,13 +560,11 @@ function BoardPage() {
   const [addingList, setAddingList] = useState(false);
   const [newListTitle, setNewListTitle] = useState("");
 
-  /* ---------- add card ---------- */
   const [addingCardToList, setAddingCardToList] = useState<number | null>(
     null
   );
   const [newCardTitle, setNewCardTitle] = useState("");
 
-  /* ---------- dialogs / overlays ---------- */
   const [deleteTarget, setDeleteTarget] = useState<{
     type: "card" | "list";
     id: number;
@@ -517,14 +572,13 @@ function BoardPage() {
   const [archiveOpen, setArchiveOpen] = useState(false);
   const [snack, setSnack] = useState("");
 
-  /* ---------- quick edit (pencil on card) ---------- */
   const [quickEdit, setQuickEdit] = useState<{
     cardId: number;
     rect: { top: number; left: number; width: number };
   } | null>(null);
   const [quickTitle, setQuickTitle] = useState("");
 
-  /* ---------- card detail modal ---------- */
+
   const [openCardId, setOpenCardId] = useState<number | null>(null);
   const [editingTitle, setEditingTitle] = useState(false);
   const [titleDraft, setTitleDraft] = useState("");
@@ -536,7 +590,7 @@ function BoardPage() {
   const [addingItemTo, setAddingItemTo] = useState<number | null>(null);
   const [itemDraft, setItemDraft] = useState("");
 
-  /* ---------- popovers (labels, members, dates ...) ---------- */
+  
   const [popover, setPopover] = useState<PopoverState | null>(null);
   const [labelName, setLabelName] = useState("");
   const [labelColor, setLabelColor] = useState(LABEL_PALETTE[0]);
@@ -546,8 +600,8 @@ function BoardPage() {
   const [checklistTitle, setChecklistTitle] = useState("Checklist");
   const [attachUrl, setAttachUrl] = useState("");
   const [attachName, setAttachName] = useState("");
+  const [uploading, setUploading] = useState(false);
 
-  /* ---------- load board ---------- */
   useEffect(() => {
     const boards = getBoards();
     const found =
@@ -560,7 +614,7 @@ function BoardPage() {
     if (found && cardParam) setOpenCardId(Number(cardParam));
   }, [id]);
 
-  /* ---------- keyboard shortcuts (ignored while typing) ---------- */
+
   useEffect(() => {
     const handler = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement | null;
@@ -586,11 +640,7 @@ function BoardPage() {
     return () => window.removeEventListener("keydown", handler);
   }, []);
 
-  /* ============================================================
-   *  CORE UPDATE HELPERS
-   * ============================================================ */
-
-  /* Always works on the latest board (no stale state) and saves it */
+  
   const commit = (fn: (current: ListItem[]) => ListItem[]) => {
     const current = boardRef.current;
     if (!current) return;
@@ -635,9 +685,27 @@ function BoardPage() {
     ])
   );
 
+  /* custom labels created on any card, so they stay selectable after being replaced */
+  const customLabelPool: LabelItem[] = (() => {
+    const seen = new Set<string>(DEFAULT_LABELS.map((label) => label.id));
+    const result: LabelItem[] = [];
+
+    lists.forEach((list) =>
+      list.cards.forEach((card) =>
+        (card.labels || []).forEach((label) => {
+          if (!seen.has(label.id)) {
+            seen.add(label.id);
+            result.push(label);
+          }
+        })
+      )
+    );
+
+    return result;
+  })();
+
   const notify = (message: string) => setSnack(message);
 
-  /* Snapshot the board before a destructive action so it can be undone */
   const snapshotForUndo = (message: string) => {
     if (boardRef.current) {
       setUndoSnapshot({ board: boardRef.current, message });
@@ -657,9 +725,6 @@ function BoardPage() {
     setSnack("");
   };
 
-  /* ============================================================
-   *  DRAG AND DROP
-   * ============================================================ */
 
   const onDragEnd = (result: DropResult) => {
     const { source, destination, type, draggableId } = result;
@@ -670,7 +735,7 @@ function BoardPage() {
     )
       return;
 
-    /* ---- reordering the lists themselves ---- */
+   
     if (type === "LIST") {
       commit((current) => {
         const next = [...current];
@@ -681,7 +746,6 @@ function BoardPage() {
       return;
     }
 
-    /* ---- moving / reordering a card ---- */
     const cardId = Number(draggableId.replace("card-", ""));
     const fromListId = Number(source.droppableId.replace("list-", ""));
     const toListId = Number(destination.droppableId.replace("list-", ""));
@@ -726,9 +790,6 @@ function BoardPage() {
     });
   };
 
-  /* ============================================================
-   *  LIST ACTIONS
-   * ============================================================ */
 
   const toggleCollapse = (listId: number) =>
     setCollapsedLists((prev) =>
@@ -909,10 +970,6 @@ function BoardPage() {
     setListMenuAnchor(null);
   };
 
-  /* ============================================================
-   *  CARD ACTIONS
-   * ============================================================ */
-
   const handleStartAddCard = (listId: number) => {
     setAddingCardToList(listId);
     setNewCardTitle("");
@@ -1037,7 +1094,6 @@ function BoardPage() {
     setDeleteTarget(null);
   };
 
-  /* ---------- card detail helpers ---------- */
 
   const resetModalUi = () => {
     setEditingTitle(false);
@@ -1103,21 +1159,24 @@ function BoardPage() {
       comments: (c.comments || []).filter((item) => item.id !== commentId),
     }));
 
-  /* labels */
-  const toggleLabel = (cardId: number, label: LabelItem) =>
+  /* labels
+     A card holds ONE label. Clicking another label replaces the current one.
+     Clicking the label that is already on the card removes it. */
+  const selectLabel = (cardId: number, label: LabelItem) =>
     updateCard(cardId, (c) => {
       const current = c.labels || [];
-      const has = current.some((item) => item.id === label.id);
       const name = label.name || "unnamed";
+      const isOnlyLabel = current.length === 1 && current[0].id === label.id;
+
+      if (isOnlyLabel) {
+        return withLog({ ...c, labels: [] }, `removed the ${name} label`);
+      }
 
       return withLog(
-        {
-          ...c,
-          labels: has
-            ? current.filter((item) => item.id !== label.id)
-            : [...current, label],
-        },
-        `${has ? "removed" : "added"} the ${name} label`
+        { ...c, labels: [label] },
+        current.length > 0
+          ? `changed the label to ${name}`
+          : `added the ${name} label`
       );
     });
 
@@ -1125,7 +1184,7 @@ function BoardPage() {
     const name = labelName.trim();
     if (!name) return;
 
-    toggleLabel(cardId, { id: `c-${uid()}`, name, color: labelColor });
+    selectLabel(cardId, { id: `c-${uid()}`, name, color: labelColor });
     setLabelName("");
   };
 
@@ -1242,6 +1301,8 @@ function BoardPage() {
   };
 
   /* attachments */
+
+  /* attach a pasted link */
   const addAttachment = (cardId: number) => {
     const raw = attachUrl.trim();
     if (!raw) return;
@@ -1253,12 +1314,68 @@ function BoardPage() {
       withLog(
         {
           ...c,
-          attachments: [...(c.attachments || []), { id: uid(), name, url }],
+          attachments: [
+            ...(c.attachments || []),
+            { id: uid(), name, url, kind: "link" },
+          ],
         },
         `attached ${name} to this card`
       )
     );
     setPopover(null);
+  };
+
+  /* attach one or more files from the user's computer */
+  const addFiles = async (cardId: number, fileList: FileList | null) => {
+    if (!fileList || fileList.length === 0) return;
+
+    const files = Array.from(fileList);
+    const tooBig = files.filter((file) => file.size > MAX_FILE_SIZE);
+    const accepted = files.filter((file) => file.size <= MAX_FILE_SIZE);
+
+    if (tooBig.length > 0) {
+      notify(
+        `${tooBig.map((file) => file.name).join(", ")} is larger than ${formatSize(
+          MAX_FILE_SIZE
+        )} and was skipped`
+      );
+    }
+    if (accepted.length === 0) return;
+
+    setUploading(true);
+
+    try {
+      const items: AttachmentItem[] = await Promise.all(
+        accepted.map(async (file, index) => ({
+          id: uid() + index,
+          name: file.name,
+          url: await readFileAsDataUrl(file),
+          kind: "file" as const,
+          mime: file.type,
+          size: file.size,
+        }))
+      );
+
+      updateCard(cardId, (c) =>
+        withLog(
+          { ...c, attachments: [...(c.attachments || []), ...items] },
+          `attached ${items.map((item) => item.name).join(", ")} to this card`
+        )
+      );
+
+      setPopover(null);
+    } catch {
+      notify("Could not attach the file. Browser storage may be full.");
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleFileInput = (cardId: number, event: ChangeEvent<HTMLInputElement>) => {
+    const input = event.target;
+    void addFiles(cardId, input.files);
+    /* reset so the same file can be picked again */
+    input.value = "";
   };
 
   const deleteAttachment = (cardId: number, attachmentId: number) =>
@@ -1515,24 +1632,23 @@ function BoardPage() {
 
       case "labels": {
         const cardLabels = card.labels || [];
-        const allLabels = [
-          ...DEFAULT_LABELS,
-          ...cardLabels.filter(
-            (label) => !DEFAULT_LABELS.some((d) => d.id === label.id)
-          ),
-        ];
+        const allLabels = [...DEFAULT_LABELS, ...customLabelPool];
 
         return (
           <>
             <PopHeader title="Labels" onClose={close} />
             <Box sx={{ px: 1.5, pb: 1.5 }}>
+              <Typography sx={{ fontSize: 12, color: CARD_MUTED, mb: 1, px: 0.5 }}>
+                Pick one label. Choosing another replaces it.
+              </Typography>
+
               {allLabels.map((label) => {
                 const on = cardLabels.some((item) => item.id === label.id);
 
                 return (
                   <Box
                     key={label.id}
-                    onClick={() => toggleLabel(card.id, label)}
+                    onClick={() => selectLabel(card.id, label)}
                     sx={{
                       display: "flex",
                       alignItems: "center",
@@ -1833,15 +1949,46 @@ function BoardPage() {
       case "attachment":
         return (
           <>
-            <PopHeader title="Attach a link" onClose={close} />
+            <PopHeader title="Attach" onClose={close} />
             <Box sx={{ px: 2, pb: 2 }}>
+              {/* ----- upload from computer ----- */}
+              <Typography
+                sx={{ fontSize: 12.5, fontWeight: 700, color: CARD_MUTED, mb: 0.75 }}
+              >
+                Attach a file from your computer
+              </Typography>
+
+              <input
+                ref={fileInputRef}
+                type="file"
+                multiple
+                hidden
+                onChange={(event) => handleFileInput(card.id, event)}
+              />
+
+              <Button
+                fullWidth
+                startIcon={<UploadFileIcon />}
+                disabled={uploading}
+                onClick={() => fileInputRef.current?.click()}
+                sx={darkButtonSx}
+              >
+                {uploading ? "Uploading…" : "Choose a file"}
+              </Button>
+
+              <Typography sx={{ fontSize: 12, color: CARD_MUTED, mt: 0.75 }}>
+                Documents, images, PDFs and more. Up to {formatSize(MAX_FILE_SIZE)} each.
+              </Typography>
+
+              <Divider sx={{ my: 2, borderColor: "rgba(255,255,255,0.12)" }} />
+
+              {/* ----- paste a link ----- */}
               <Typography
                 sx={{ fontSize: 12.5, fontWeight: 700, color: CARD_MUTED, mb: 0.5 }}
               >
-                Link
+                Or paste a link
               </Typography>
               <TextField
-                autoFocus
                 fullWidth
                 size="small"
                 placeholder="Paste a link here…"
@@ -1878,7 +2025,7 @@ function BoardPage() {
                 onClick={() => addAttachment(card.id)}
                 sx={{ ...primaryButtonSx, mt: 1.5 }}
               >
-                Attach
+                Attach link
               </Button>
             </Box>
           </>
@@ -3158,8 +3305,9 @@ function BoardPage() {
             flexDirection: "column",
             overflow: "hidden",
             borderRadius: 3,
-            background: DEFAULT_CARD_COLOR,
-            color: CARD_TEXT,
+            background: "#FFFFFF !important",
+            backgroundColor: "#FFFFFF !important",
+            color: `${L_TEXT} !important`,
             backgroundImage: "none",
           },
         }}
@@ -3209,7 +3357,7 @@ function BoardPage() {
                     onClick={(event) =>
                       openPopover("cover", event.currentTarget, openCard.id)
                     }
-                    sx={{ color: CARD_TEXT }}
+                    sx={{ color: (hasCover(openCard.color) ? "#FFFFFF" : L_TEXT) }}
                   >
                     <ImageOutlinedIcon />
                   </IconButton>
@@ -3218,7 +3366,7 @@ function BoardPage() {
                 <Tooltip title={openCard.watching ? "Stop watching" : "Watch"}>
                   <IconButton
                     onClick={() => toggleWatch(openCard)}
-                    sx={{ color: openCard.watching ? FOCUS_BLUE : CARD_TEXT }}
+                    sx={{ color: openCard.watching ? FOCUS_BLUE : (hasCover(openCard.color) ? "#FFFFFF" : L_TEXT) }}
                   >
                     {openCard.watching ? (
                       <VisibilityIcon />
@@ -3233,14 +3381,14 @@ function BoardPage() {
                     onClick={(event) =>
                       openPopover("more", event.currentTarget, openCard.id)
                     }
-                    sx={{ color: CARD_TEXT }}
+                    sx={{ color: (hasCover(openCard.color) ? "#FFFFFF" : L_TEXT) }}
                   >
                     <MoreHorizIcon />
                   </IconButton>
                 </Tooltip>
 
                 <Tooltip title="Close">
-                  <IconButton onClick={closeCardModal} sx={{ color: CARD_TEXT }}>
+                  <IconButton onClick={closeCardModal} sx={{ color: (hasCover(openCard.color) ? "#FFFFFF" : L_TEXT) }}>
                     <CloseIcon />
                   </IconButton>
                 </Tooltip>
@@ -3273,7 +3421,7 @@ function BoardPage() {
                     onClick={() => toggleComplete(openCard)}
                     sx={{
                       p: 0.25,
-                      color: openCard.completed ? "#4BCE97" : CARD_MUTED,
+                      color: openCard.completed ? "#4BCE97" : L_MUTED,
                     }}
                   >
                     {openCard.completed ? (
@@ -3299,9 +3447,9 @@ function BoardPage() {
                         if (event.key === "Escape") setEditingTitle(false);
                       }}
                       sx={{
-                        ...darkFieldSx,
+                        ...lightFieldSx,
                         "& .MuiOutlinedInput-root": {
-                          ...fieldRootSx,
+                          ...lightFieldRootSx,
                           fontSize: 24,
                           fontWeight: 700,
                           py: 0.5,
@@ -3319,6 +3467,7 @@ function BoardPage() {
                         fontSize: 26,
                         fontWeight: 700,
                         lineHeight: 1.25,
+                        color: L_TEXT,
                         cursor: "text",
                         wordBreak: "break-word",
                       }}
@@ -3331,20 +3480,11 @@ function BoardPage() {
                 {/* add buttons */}
                 <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1, mt: 2.5, ml: 5.5 }}>
                   <Button
-                    startIcon={<AddIcon />}
-                    onClick={(event) =>
-                      openPopover("add", event.currentTarget, openCard.id)
-                    }
-                    sx={darkButtonSx}
-                  >
-                    Add
-                  </Button>
-                  <Button
                     startIcon={<LabelOutlinedIcon />}
                     onClick={(event) =>
                       openPopover("labels", event.currentTarget, openCard.id)
                     }
-                    sx={darkButtonSx}
+                    sx={lightButtonSx}
                   >
                     Labels
                   </Button>
@@ -3353,7 +3493,7 @@ function BoardPage() {
                     onClick={(event) =>
                       openPopover("dates", event.currentTarget, openCard.id)
                     }
-                    sx={darkButtonSx}
+                    sx={lightButtonSx}
                   >
                     Dates
                   </Button>
@@ -3362,7 +3502,7 @@ function BoardPage() {
                     onClick={(event) =>
                       openPopover("checklist", event.currentTarget, openCard.id)
                     }
-                    sx={darkButtonSx}
+                    sx={lightButtonSx}
                   >
                     Checklist
                   </Button>
@@ -3371,7 +3511,7 @@ function BoardPage() {
                     onClick={(event) =>
                       openPopover("attachment", event.currentTarget, openCard.id)
                     }
-                    sx={darkButtonSx}
+                    sx={lightButtonSx}
                   >
                     Attachment
                   </Button>
@@ -3382,9 +3522,9 @@ function BoardPage() {
                   {(openCard.labels || []).length > 0 && (
                     <Box>
                       <Typography
-                        sx={{ fontSize: 12.5, fontWeight: 700, color: CARD_MUTED, mb: 0.75 }}
+                        sx={{ fontSize: 12.5, fontWeight: 700, color: L_MUTED, mb: 0.75 }}
                       >
-                        Labels
+                        Label
                       </Typography>
                       <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.75 }}>
                         {(openCard.labels || []).map((label) => (
@@ -3411,20 +3551,6 @@ function BoardPage() {
                             {label.name}
                           </Box>
                         ))}
-                        <IconButton
-                          onClick={(event) =>
-                            openPopover("labels", event.currentTarget, openCard.id)
-                          }
-                          sx={{
-                            width: 32,
-                            height: 32,
-                            borderRadius: 1,
-                            color: CARD_TEXT,
-                            backgroundColor: "rgba(255,255,255,0.08)",
-                          }}
-                        >
-                          <AddIcon fontSize="small" />
-                        </IconButton>
                       </Box>
                     </Box>
                   )}
@@ -3432,7 +3558,7 @@ function BoardPage() {
                   {(openCard.dueDate || openCard.startDate) && (
                     <Box>
                       <Typography
-                        sx={{ fontSize: 12.5, fontWeight: 700, color: CARD_MUTED, mb: 0.75 }}
+                        sx={{ fontSize: 12.5, fontWeight: 700, color: L_MUTED, mb: 0.75 }}
                       >
                         Dates
                       </Typography>
@@ -3442,7 +3568,7 @@ function BoardPage() {
                           openPopover("dates", event.currentTarget, openCard.id)
                         }
                         sx={{
-                          ...darkButtonSx,
+                          ...lightButtonSx,
                           minHeight: 32,
                           ...(dueTone(openCard) && openCard.dueDate
                             ? {
@@ -3462,7 +3588,7 @@ function BoardPage() {
                 {/* members */}
                 <Box sx={{ mt: 3, ml: 5.5 }}>
                   <Typography
-                    sx={{ fontSize: 12.5, fontWeight: 700, color: CARD_MUTED, mb: 0.75 }}
+                    sx={{ fontSize: 12.5, fontWeight: 700, color: L_MUTED, mb: 0.75 }}
                   >
                     Members
                   </Typography>
@@ -3477,9 +3603,9 @@ function BoardPage() {
                       sx={{
                         width: 34,
                         height: 34,
-                        color: CARD_TEXT,
-                        backgroundColor: "rgba(255,255,255,0.08)",
-                        "&:hover": { backgroundColor: "rgba(255,255,255,0.16)" },
+                        color: L_TEXT,
+                        backgroundColor: "rgba(9,30,66,0.08)",
+                        "&:hover": { backgroundColor: "rgba(9,30,66,0.16)" },
                       }}
                     >
                       <AddIcon fontSize="small" />
@@ -3499,7 +3625,7 @@ function BoardPage() {
                             setDescDraft(openCard.description || "");
                             setEditingDesc(true);
                           }}
-                          sx={darkButtonSx}
+                          sx={lightButtonSx}
                         >
                           Edit
                         </Button>
@@ -3518,7 +3644,7 @@ function BoardPage() {
                           placeholder="Add a more detailed description…"
                           value={descDraft}
                           onChange={(event) => setDescDraft(event.target.value)}
-                          sx={darkFieldSx}
+                          sx={lightFieldSx}
                         />
                         <Box sx={{ display: "flex", gap: 0.75, mt: 1 }}>
                           <Button
@@ -3530,7 +3656,7 @@ function BoardPage() {
                           </Button>
                           <Button
                             onClick={() => setEditingDesc(false)}
-                            sx={ghostButtonSx}
+                            sx={lightGhostButtonSx}
                           >
                             Cancel
                           </Button>
@@ -3541,6 +3667,7 @@ function BoardPage() {
                         sx={{
                           fontSize: 14.5,
                           lineHeight: 1.6,
+                          color: L_TEXT,
                           whiteSpace: "pre-wrap",
                           wordBreak: "break-word",
                         }}
@@ -3559,9 +3686,9 @@ function BoardPage() {
                           py: 1.5,
                           borderRadius: 1.5,
                           cursor: "pointer",
-                          color: CARD_MUTED,
+                          color: L_MUTED,
                           fontSize: 14.5,
-                          border: "1px solid rgba(255,255,255,0.25)",
+                          border: "1px solid rgba(9,30,66,0.25)",
                           "&:hover": { borderColor: FOCUS_BLUE },
                         }}
                       >
@@ -3574,50 +3701,114 @@ function BoardPage() {
                 {/* attachments */}
                 {(openCard.attachments || []).length > 0 && (
                   <Box sx={{ mt: 3.5 }}>
-                    <SectionHead icon={<AttachFileIcon />} title="Attachments" />
-                    <Box sx={{ ml: 5.5, display: "flex", flexDirection: "column", gap: 0.75 }}>
-                      {(openCard.attachments || []).map((item) => (
-                        <Box
-                          key={item.id}
-                          sx={{
-                            display: "flex",
-                            alignItems: "center",
-                            gap: 1,
-                            px: 1.5,
-                            py: 0.75,
-                            borderRadius: 1.5,
-                            backgroundColor: "rgba(255,255,255,0.06)",
-                          }}
+                    <SectionHead
+                      icon={<AttachFileIcon />}
+                      title="Attachments"
+                      action={
+                        <Button
+                          startIcon={<AddIcon />}
+                          onClick={(event) =>
+                            openPopover("attachment", event.currentTarget, openCard.id)
+                          }
+                          sx={lightButtonSx}
                         >
-                          <LinkIcon sx={{ fontSize: 18, color: CARD_MUTED }} />
-                          <Typography
-                            component="a"
-                            href={item.url}
-                            target="_blank"
-                            rel="noopener noreferrer"
+                          Add
+                        </Button>
+                      }
+                    />
+                    <Box sx={{ ml: 5.5, display: "flex", flexDirection: "column", gap: 0.75 }}>
+                      {(openCard.attachments || []).map((item) => {
+                        const isFile = item.kind === "file";
+                        const isImage = isFile && (item.mime || "").startsWith("image/");
+
+                        return (
+                          <Box
+                            key={item.id}
                             sx={{
-                              flex: 1,
-                              minWidth: 0,
-                              fontSize: 14,
-                              color: FOCUS_BLUE,
-                              textDecoration: "none",
-                              overflow: "hidden",
-                              textOverflow: "ellipsis",
-                              whiteSpace: "nowrap",
-                              "&:hover": { textDecoration: "underline" },
+                              display: "flex",
+                              alignItems: "center",
+                              gap: 1.25,
+                              px: 1.25,
+                              py: 0.75,
+                              borderRadius: 1.5,
+                              backgroundColor: "rgba(9,30,66,0.06)",
                             }}
                           >
-                            {item.name}
-                          </Typography>
-                          <IconButton
-                            size="small"
-                            onClick={() => deleteAttachment(openCard.id, item.id)}
-                            sx={{ color: CARD_MUTED }}
-                          >
-                            <CloseIcon sx={{ fontSize: 16 }} />
-                          </IconButton>
-                        </Box>
-                      ))}
+                            {/* thumbnail / icon */}
+                            <Box
+                              sx={{
+                                width: 44,
+                                height: 44,
+                                flexShrink: 0,
+                                borderRadius: 1,
+                                overflow: "hidden",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                backgroundColor: "rgba(9,30,66,0.08)",
+                                color: L_MUTED,
+                              }}
+                            >
+                              {isImage ? (
+                                <Box
+                                  component="img"
+                                  src={item.url}
+                                  alt={item.name}
+                                  sx={{ width: "100%", height: "100%", objectFit: "cover" }}
+                                />
+                              ) : isFile ? (
+                                <InsertDriveFileOutlinedIcon />
+                              ) : (
+                                <LinkIcon />
+                              )}
+                            </Box>
+
+                            <Box sx={{ flex: 1, minWidth: 0 }}>
+                              <Typography
+                                component="a"
+                                href={item.url}
+                                {...(isFile
+                                  ? { download: item.name }
+                                  : { target: "_blank", rel: "noopener noreferrer" })}
+                                sx={{
+                                  display: "block",
+                                  fontSize: 14,
+                                  fontWeight: 600,
+                                  color: FOCUS_BLUE,
+                                  textDecoration: "none",
+                                  overflow: "hidden",
+                                  textOverflow: "ellipsis",
+                                  whiteSpace: "nowrap",
+                                  "&:hover": { textDecoration: "underline" },
+                                }}
+                              >
+                                {item.name}
+                              </Typography>
+                              <Typography
+                                sx={{
+                                  fontSize: 12,
+                                  color: L_MUTED,
+                                  overflow: "hidden",
+                                  textOverflow: "ellipsis",
+                                  whiteSpace: "nowrap",
+                                }}
+                              >
+                                {isFile
+                                  ? `File${item.size ? ` · ${formatSize(item.size)}` : ""} · click to download`
+                                  : item.url}
+                              </Typography>
+                            </Box>
+
+                            <IconButton
+                              size="small"
+                              onClick={() => deleteAttachment(openCard.id, item.id)}
+                              sx={{ color: L_MUTED }}
+                            >
+                              <CloseIcon sx={{ fontSize: 16 }} />
+                            </IconButton>
+                          </Box>
+                        );
+                      })}
                     </Box>
                   </Box>
                 )}
@@ -3637,7 +3828,7 @@ function BoardPage() {
                         action={
                           <Button
                             onClick={() => deleteChecklist(openCard.id, checklist.id)}
-                            sx={darkButtonSx}
+                            sx={lightButtonSx}
                           >
                             Delete
                           </Button>
@@ -3646,7 +3837,7 @@ function BoardPage() {
 
                       <Box sx={{ ml: 5.5 }}>
                         <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, mb: 1 }}>
-                          <Typography sx={{ fontSize: 12, color: CARD_MUTED, width: 32 }}>
+                          <Typography sx={{ fontSize: 12, color: L_MUTED, width: 32 }}>
                             {percent}%
                           </Typography>
                           <LinearProgress
@@ -3656,7 +3847,7 @@ function BoardPage() {
                               flex: 1,
                               height: 8,
                               borderRadius: 4,
-                              backgroundColor: "rgba(255,255,255,0.12)",
+                              backgroundColor: "rgba(9,30,66,0.12)",
                               "& .MuiLinearProgress-bar": {
                                 backgroundColor:
                                   percent === 100 ? "#4BCE97" : FOCUS_BLUE,
@@ -3689,7 +3880,7 @@ function BoardPage() {
                                 }))
                               }
                               sx={{
-                                color: CARD_MUTED,
+                                color: L_MUTED,
                                 "&.Mui-checked": { color: FOCUS_BLUE },
                               }}
                             />
@@ -3699,7 +3890,7 @@ function BoardPage() {
                                 fontSize: 14.5,
                                 wordBreak: "break-word",
                                 textDecoration: item.done ? "line-through" : "none",
-                                color: item.done ? CARD_MUTED : CARD_TEXT,
+                                color: item.done ? L_MUTED : L_TEXT,
                               }}
                             >
                               {item.text}
@@ -3742,7 +3933,7 @@ function BoardPage() {
                                   setItemDraft("");
                                 }
                               }}
-                              sx={darkFieldSx}
+                              sx={lightFieldSx}
                             />
                             <Box sx={{ display: "flex", gap: 0.75, mt: 1 }}>
                               <Button
@@ -3758,7 +3949,7 @@ function BoardPage() {
                                   setAddingItemTo(null);
                                   setItemDraft("");
                                 }}
-                                sx={ghostButtonSx}
+                                sx={lightGhostButtonSx}
                               >
                                 Cancel
                               </Button>
@@ -3770,7 +3961,7 @@ function BoardPage() {
                               setAddingItemTo(checklist.id);
                               setItemDraft("");
                             }}
-                            sx={{ ...darkButtonSx, mt: 1, minHeight: 32 }}
+                            sx={{ ...lightButtonSx, mt: 1, minHeight: 32 }}
                           >
                             Add an item
                           </Button>
@@ -3790,6 +3981,7 @@ function BoardPage() {
                   px: 3,
                   py: 2.5,
                   backgroundColor: PANEL_BG,
+                  color: CARD_TEXT,
                   borderLeft: { md: "1px solid rgba(255,255,255,0.1)" },
                 }}
               >
@@ -3802,7 +3994,7 @@ function BoardPage() {
                   }}
                 >
                   <ChatIcon sx={{ color: CARD_MUTED }} />
-                  <Typography sx={{ flex: 1, fontSize: 16, fontWeight: 700 }}>
+                  <Typography sx={{ flex: 1, fontSize: 16, fontWeight: 700, color: "#FFFFFF" }}>
                     Comments and activity
                   </Typography>
                   <Button
@@ -3867,7 +4059,7 @@ function BoardPage() {
                       color: CARD_MUTED,
                       fontSize: 15,
                       backgroundColor: DEFAULT_CARD_COLOR,
-                      "&:hover": { backgroundColor: "#1C2024" },
+                      "&:hover": { backgroundColor: "#000000" },
                     }}
                   >
                     Write a comment…
@@ -3882,7 +4074,7 @@ function BoardPage() {
                       <Box sx={{ flex: 1, minWidth: 0 }}>
                         {entry.commentId !== undefined ? (
                           <>
-                            <Typography sx={{ fontSize: 14.5, fontWeight: 700 }}>
+                            <Typography sx={{ fontSize: 14.5, fontWeight: 700, color: "#FFFFFF" }}>
                               {CURRENT_USER}
                               <Typography
                                 component="span"
@@ -3899,6 +4091,7 @@ function BoardPage() {
                                 py: 1,
                                 borderRadius: 2,
                                 backgroundColor: DEFAULT_CARD_COLOR,
+                                color: CARD_TEXT,
                                 fontSize: 14.5,
                                 lineHeight: 1.5,
                                 whiteSpace: "pre-wrap",
@@ -3931,8 +4124,8 @@ function BoardPage() {
                           </>
                         ) : (
                           <>
-                            <Typography sx={{ fontSize: 14.5 }}>
-                              <Box component="span" sx={{ fontWeight: 700 }}>
+                            <Typography sx={{ fontSize: 14.5, color: CARD_TEXT }}>
+                              <Box component="span" sx={{ fontWeight: 700, color: "#FFFFFF" }}>
                                 {CURRENT_USER}
                               </Box>{" "}
                               {entry.text}
@@ -3971,15 +4164,24 @@ function BoardPage() {
             mt: 0.75,
             maxHeight: "80vh",
             borderRadius: 2,
-            backgroundColor: PANEL_BG,
+            backgroundColor: `${PANEL_BG} !important`,
             backgroundImage: "none",
-            color: CARD_TEXT,
+            color: `${CARD_TEXT} !important`,
             border: "1px solid rgba(255,255,255,0.12)",
             boxShadow: "0 12px 32px rgba(0,0,0,0.5)",
           },
         }}
       >
-        {renderPopoverBody()}
+        <Box
+          sx={{
+            backgroundColor: PANEL_BG,
+            color: CARD_TEXT,
+            borderRadius: 2,
+            minHeight: 40,
+          }}
+        >
+          {renderPopoverBody()}
+        </Box>
       </Popover>
 
       {/* ========================= ARCHIVED CARDS ========================= */}

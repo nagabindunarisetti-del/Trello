@@ -29,6 +29,7 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
+  ListItemIcon,
 } from "@mui/material";
 
 import { useNavigate } from "react-router-dom";
@@ -40,11 +41,11 @@ import HelpIcon from "@mui/icons-material/Help";
 import StarIcon from "@mui/icons-material/Star";
 import StarBorderIcon from "@mui/icons-material/StarBorder";
 import AppsIcon from "@mui/icons-material/Apps";
+import LogoutIcon from "@mui/icons-material/Logout";
+import SettingsOutlinedIcon from "@mui/icons-material/SettingsOutlined";
 
-import {
-  getBoards,
-  saveBoards,
-} from "../utils/boardStorage";
+import { getBoards, saveBoards } from "../utils/boardStorage";
+import { useAuth } from "./AuthContext";
 
 import type { BoardItem } from "../types/board";
 
@@ -70,29 +71,15 @@ const C = {
    HELPERS
 ===================================================== */
 
-const getName = (board: BoardItem) =>
-  board.title || "Untitled board";
+const getName = (board: BoardItem) => board.title || "Untitled board";
 
-const isStarred = (board: BoardItem) =>
-  Boolean(board.starred);
+const isStarred = (board: BoardItem) => Boolean(board.starred);
 
 /* =====================================================
    MENUS
 ===================================================== */
 
-const SIMPLE_MENUS = {
-  help: [
-    "Getting started",
-    "Keyboard shortcuts",
-    "Contact support",
-  ],
-
-  profile: [
-    "Profile",
-    "Settings",
-    "Log out",
-  ],
-};
+const HELP_MENU = ["Getting started", "Keyboard shortcuts", "Contact support"];
 
 /* =====================================================
    STYLES
@@ -114,8 +101,7 @@ const menuPaperSx = {
   color: C.text,
   border: `1px solid ${C.border}`,
   borderRadius: "8px",
-  boxShadow:
-    "0 8px 12px #0304045c, 0 0 1px #03040480",
+  boxShadow: "0 8px 12px #0304045c, 0 0 1px #03040480",
   mt: 0.5,
   minWidth: 260,
 
@@ -146,15 +132,17 @@ interface NavbarProps {
    NAVBAR
 ===================================================== */
 
-function Navbar({
-  onOpenBoard,
-  onSelect = () => {},
-}: NavbarProps) {
+function Navbar({ onOpenBoard, onSelect = () => {} }: NavbarProps) {
   const navigate = useNavigate();
 
-  /* =====================================================
-     MENU STATE
-  ===================================================== */
+  /* ---------- AUTH / PROFILE ---------- */
+
+  const { user, logout } = useAuth();
+
+  const displayName = user?.name || user?.email || "User";
+  const initial = displayName.charAt(0).toUpperCase();
+
+  /* ---------- MENU STATE ---------- */
 
   const [menu, setMenu] = useState<{
     id: string | null;
@@ -164,175 +152,90 @@ function Navbar({
     anchor: null,
   });
 
-  /* =====================================================
-     SEARCH STATE
-  ===================================================== */
+  /* ---------- SEARCH STATE ---------- */
 
   const [query, setQuery] = useState("");
+  const [searchOpen, setSearchOpen] = useState(false);
+  const searchRef = useRef<HTMLDivElement | null>(null);
 
-  const [searchOpen, setSearchOpen] =
-    useState(false);
+  /* ---------- BOARDS STATE ---------- */
 
-  const searchRef =
-    useRef<HTMLDivElement | null>(null);
+  const [boards, setBoards] = useState<BoardItem[]>([]);
 
-  /* =====================================================
-     BOARDS STATE
-  ===================================================== */
+  /* ---------- CREATE BOARD STATE ---------- */
 
-  const [boards, setBoards] =
-    useState<BoardItem[]>([]);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [newName, setNewName] = useState("");
 
-  /* =====================================================
-     CREATE BOARD STATE
-  ===================================================== */
+  /* ---------- TOAST ---------- */
 
-  const [createOpen, setCreateOpen] =
-    useState(false);
+  const [toast, setToast] = useState("");
 
-  const [newName, setNewName] =
-    useState("");
+  /* ---------- NOTIFICATIONS ---------- */
 
-  /* =====================================================
-     TOAST
-  ===================================================== */
+  const [notifications, setNotifications] = useState([
+    { id: 1, text: 'Aisha assigned you to "Fix login bug"', read: false },
+    { id: 2, text: "Sprint 24 is due tomorrow", read: false },
+    { id: 3, text: 'Ravi commented on "Homepage hero"', read: false },
+  ]);
 
-  const [toast, setToast] =
-    useState("");
-
-  /* =====================================================
-     NOTIFICATIONS
-  ===================================================== */
-
-  const [notifications, setNotifications] =
-    useState([
-      {
-        id: 1,
-        text:
-          'Aisha assigned you to "Fix login bug"',
-        read: false,
-      },
-      {
-        id: 2,
-        text:
-          "Sprint 24 is due tomorrow",
-        read: false,
-      },
-      {
-        id: 3,
-        text:
-          'Ravi commented on "Homepage hero"',
-        read: false,
-      },
-    ]);
-
-  /* =====================================================
-     LOAD BOARDS
-  ===================================================== */
+  /* ---------- LOAD BOARDS ---------- */
 
   useEffect(() => {
     const loadBoards = () => {
       try {
         const storedBoards = getBoards();
-
-        setBoards(
-          Array.isArray(storedBoards)
-            ? storedBoards
-            : []
-        );
+        setBoards(Array.isArray(storedBoards) ? storedBoards : []);
       } catch (error) {
-        console.error(
-          "Failed to load boards:",
-          error
-        );
-
+        console.error("Failed to load boards:", error);
         setBoards([]);
       }
     };
 
     loadBoards();
 
-    window.addEventListener(
-      "boardsUpdated",
-      loadBoards
-    );
+    window.addEventListener("boardsUpdated", loadBoards);
 
     return () => {
-      window.removeEventListener(
-        "boardsUpdated",
-        loadBoards
-      );
+      window.removeEventListener("boardsUpdated", loadBoards);
     };
   }, []);
 
-  /* =====================================================
-     SEARCH RESULTS
-  ===================================================== */
+  /* ---------- SEARCH RESULTS ---------- */
 
   const results = useMemo(() => {
-    const searchText = query
-      .trim()
-      .toLowerCase();
+    const searchText = query.trim().toLowerCase();
 
     if (!searchText) {
       return [];
     }
 
-    return boards.filter((board) => {
-      const boardName = getName(board)
-        .toLowerCase()
-        .trim();
-
-      return boardName.includes(searchText);
-    });
+    return boards.filter((board) =>
+      getName(board).toLowerCase().trim().includes(searchText)
+    );
   }, [query, boards]);
 
-  /* =====================================================
-     UNREAD NOTIFICATIONS
-  ===================================================== */
+  /* ---------- UNREAD NOTIFICATIONS ---------- */
 
-  const unread =
-    notifications.filter(
-      (notification) =>
-        !notification.read
-    ).length;
+  const unread = notifications.filter((n) => !n.read).length;
 
-  /* =====================================================
-     MENU HANDLERS
-  ===================================================== */
+  /* ---------- MENU HANDLERS ---------- */
 
-  const openMenu =
-    (id: string) =>
-    (event: MouseEvent<HTMLElement>) => {
-      setMenu({
-        id,
-        anchor: event.currentTarget,
-      });
-    };
-
-  const closeMenu = () => {
-    setMenu({
-      id: null,
-      anchor: null,
-    });
+  const openMenu = (id: string) => (event: MouseEvent<HTMLElement>) => {
+    setMenu({ id, anchor: event.currentTarget });
   };
 
-  /* =====================================================
-     SEARCH HANDLERS
-  ===================================================== */
+  const closeMenu = () => {
+    setMenu({ id: null, anchor: null });
+  };
 
-  const handleSearchChange = (
-    event: ChangeEvent<HTMLInputElement>
-  ) => {
+  /* ---------- SEARCH HANDLERS ---------- */
+
+  const handleSearchChange = (event: ChangeEvent<HTMLInputElement>) => {
     const value = event.target.value;
 
     setQuery(value);
-
-    if (value.trim()) {
-      setSearchOpen(true);
-    } else {
-      setSearchOpen(false);
-    }
+    setSearchOpen(Boolean(value.trim()));
   };
 
   const handleSearchFocus = () => {
@@ -341,9 +244,7 @@ function Navbar({
     }
   };
 
-  const handleSearchKeyDown = (
-    event: KeyboardEvent<HTMLInputElement>
-  ) => {
+  const handleSearchKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
     if (event.key === "Enter") {
       event.preventDefault();
 
@@ -356,24 +257,15 @@ function Navbar({
 
     if (event.key === "Escape") {
       event.preventDefault();
-
       setSearchOpen(false);
-
-      return;
     }
   };
 
-  /* =====================================================
-     OPEN BOARD
-  ===================================================== */
+  /* ---------- OPEN BOARD ---------- */
 
-  const handleOpenBoard = (
-    board: BoardItem
-  ) => {
+  const handleOpenBoard = (board: BoardItem) => {
     setQuery("");
-
     setSearchOpen(false);
-
     closeMenu();
 
     navigate(`/board/${board.id}`);
@@ -381,9 +273,7 @@ function Navbar({
     onOpenBoard?.(board);
   };
 
-  /* =====================================================
-     CREATE BOARD
-  ===================================================== */
+  /* ---------- CREATE BOARD ---------- */
 
   const submitCreate = () => {
     const name = newName.trim();
@@ -395,109 +285,69 @@ function Navbar({
     const newBoard: BoardItem = {
       id: Date.now(),
       title: name,
-      background:
-        "linear-gradient(135deg, #667eea, #764ba2)",
+      background: "linear-gradient(135deg, #667eea, #764ba2)",
       starred: false,
       lists: [],
     };
 
-    const currentBoards = getBoards();
-
-    const updatedBoards = [
-      ...currentBoards,
-      newBoard,
-    ];
+    const updatedBoards = [...getBoards(), newBoard];
 
     saveBoards(updatedBoards);
-
     setBoards(updatedBoards);
 
-    window.dispatchEvent(
-      new Event("boardsUpdated")
-    );
+    window.dispatchEvent(new Event("boardsUpdated"));
 
     setCreateOpen(false);
-
     setNewName("");
-
-    setToast(
-      `Board "${name}" created`
-    );
+    setToast(`Board "${name}" created`);
 
     navigate(`/board/${newBoard.id}`);
   };
 
-  /* =====================================================
-     TOGGLE STAR
-  ===================================================== */
+  /* ---------- TOGGLE STAR ---------- */
 
-  const handleToggleStar = (
-    event: MouseEvent,
-    board: BoardItem
-  ) => {
+  const handleToggleStar = (event: MouseEvent, board: BoardItem) => {
     event.stopPropagation();
 
-    const currentBoards = getBoards();
-
-    const updatedBoards =
-      currentBoards.map((item) =>
-        item.id === board.id
-          ? {
-              ...item,
-              starred: !item.starred,
-            }
-          : item
-      );
+    const updatedBoards = getBoards().map((item) =>
+      item.id === board.id ? { ...item, starred: !item.starred } : item
+    );
 
     saveBoards(updatedBoards);
-
     setBoards(updatedBoards);
 
-    window.dispatchEvent(
-      new Event("boardsUpdated")
-    );
+    window.dispatchEvent(new Event("boardsUpdated"));
   };
 
-  /* =====================================================
-     SIMPLE MENU
-  ===================================================== */
+  /* ---------- HELP MENU ITEM ---------- */
 
-  const pickSimple = (
-    label: string
-  ) => {
+  const pickSimple = (label: string) => {
     closeMenu();
-
     setToast(label);
-
     onSelect(label);
   };
 
-  /* =====================================================
-     SEARCH RESULT
-     
-     IMPORTANT:
-     This is Box, NOT MenuItem.
-     MenuItem cannot be used outside Menu/MenuList.
-  ===================================================== */
+  /* ---------- LOGOUT ---------- */
 
-  const renderBoard = (
-    board: BoardItem
-  ) => {
+  const handleLogout = () => {
+    closeMenu();
+    logout();
+    navigate("/", { replace: true });
+  };
+
+  /* ---------- SEARCH RESULT ROW ----------
+     Box, NOT MenuItem: MenuItem can't be used outside Menu/MenuList. */
+
+  const renderBoard = (board: BoardItem) => {
     return (
       <Box
         key={board.id}
         role="button"
         tabIndex={0}
-        onClick={() =>
-          handleOpenBoard(board)
-        }
+        onClick={() => handleOpenBoard(board)}
         onKeyDown={(event) => {
-          if (
-            event.key === "Enter" ||
-            event.key === " "
-          ) {
+          if (event.key === "Enter" || event.key === " ") {
             event.preventDefault();
-
             handleOpenBoard(board);
           }
         }}
@@ -505,13 +355,9 @@ function Navbar({
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
-
           gap: 1,
-
           minHeight: 46,
-
           px: 1.5,
-
           cursor: "pointer",
 
           "&:hover": {
@@ -519,59 +365,31 @@ function Navbar({
           },
 
           "&:focus": {
-            outline:
-              `2px solid ${C.blue}`,
-
+            outline: `2px solid ${C.blue}`,
             outlineOffset: "-2px",
           },
         }}
       >
-        {/* BOARD NAME */}
-
         <Typography
           sx={{
             fontSize: 14,
-
             color: C.textStrong,
-
             overflow: "hidden",
-
-            textOverflow:
-              "ellipsis",
-
-            whiteSpace:
-              "nowrap",
-
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
             flex: 1,
-
             minWidth: 0,
           }}
         >
           {getName(board)}
         </Typography>
 
-        {/* STAR BUTTON */}
-
         <IconButton
           size="small"
-          aria-label={
-            isStarred(board)
-              ? "Unstar board"
-              : "Star board"
-          }
-          onClick={(event) => {
-            event.stopPropagation();
-
-            handleToggleStar(
-              event,
-              board
-            );
-          }}
+          aria-label={isStarred(board) ? "Unstar board" : "Star board"}
+          onClick={(event) => handleToggleStar(event, board)}
           sx={{
-            color: isStarred(board)
-              ? C.star
-              : C.muted,
-
+            color: isStarred(board) ? C.star : C.muted,
             flexShrink: 0,
 
             "&:hover": {
@@ -580,13 +398,9 @@ function Navbar({
           }}
         >
           {isStarred(board) ? (
-            <StarIcon
-              fontSize="small"
-            />
+            <StarIcon fontSize="small" />
           ) : (
-            <StarBorderIcon
-              fontSize="small"
-            />
+            <StarBorderIcon fontSize="small" />
           )}
         </IconButton>
       </Box>
@@ -599,42 +413,29 @@ function Navbar({
 
   return (
     <>
-      {/* =================================================
-          NAVBAR
-      ================================================= */}
+      {/* ================= NAVBAR ================= */}
 
       <AppBar
         position="sticky"
         elevation={0}
         sx={{
           height: 48,
-
           bgcolor: C.bar,
-
           backgroundImage: "none",
-
-          borderBottom:
-            `1px solid ${C.border}`,
-
+          borderBottom: `1px solid ${C.border}`,
           zIndex: 1200,
         }}
       >
         <Toolbar
           disableGutters
           sx={{
-            minHeight:
-              "48px !important",
-
+            minHeight: "48px !important",
             height: 48,
-
             px: 1.5,
-
             gap: 1,
           }}
         >
-          {/* =================================================
-              APP SWITCHER
-          ================================================= */}
+          {/* APP SWITCHER */}
 
           <IconButton
             aria-label="switch apps"
@@ -644,29 +445,18 @@ function Navbar({
             <AppsIcon />
           </IconButton>
 
-          {/* =================================================
-              LOGO
-          ================================================= */}
+          {/* LOGO */}
 
           <Box
-            onClick={() =>
-              navigate("/")
-            }
+            onClick={() => navigate("/dashboard")}
             sx={{
               display: "flex",
-
               alignItems: "center",
-
               gap: 0.75,
-
               height: 32,
-
               px: 0.75,
-
               borderRadius: "3px",
-
               cursor: "pointer",
-
               flexShrink: 0,
 
               "&:hover": {
@@ -674,36 +464,23 @@ function Navbar({
               },
             }}
           >
-            {/* LOGO ICON */}
-
             <Box
               sx={{
                 display: "flex",
-
                 gap: "2px",
-
                 p: "3px",
-
                 width: 20,
-
                 height: 20,
-
                 bgcolor: C.blue,
-
                 borderRadius: "3px",
-
-                boxSizing:
-                  "border-box",
+                boxSizing: "border-box",
               }}
             >
               <Box
                 sx={{
                   flex: 1,
-
                   height: "75%",
-
                   bgcolor: C.bar,
-
                   borderRadius: "1px",
                 }}
               />
@@ -711,50 +488,33 @@ function Navbar({
               <Box
                 sx={{
                   flex: 1,
-
                   height: "50%",
-
                   bgcolor: C.bar,
-
                   borderRadius: "1px",
                 }}
               />
             </Box>
 
-            {/* LOGO TEXT */}
-
             <Typography
               sx={{
                 fontSize: 18,
-
                 fontWeight: 700,
-
                 color: C.text,
-
-                letterSpacing:
-                  "-0.3px",
-
-                display: {
-                  xs: "none",
-                  sm: "block",
-                },
+                letterSpacing: "-0.3px",
+                display: { xs: "none", sm: "block" },
               }}
             >
               TaskFlow
             </Typography>
           </Box>
 
-          {/* =================================================
-              SEARCH
-          ================================================= */}
+          {/* SEARCH */}
 
           <Box
             ref={searchRef}
             sx={{
               flex: 1,
-
               minWidth: 0,
-
               position: "relative",
             }}
           >
@@ -763,38 +523,24 @@ function Navbar({
               placeholder="Search boards"
               size="small"
               value={query}
-              onChange={
-                handleSearchChange
-              }
-              onFocus={
-                handleSearchFocus
-              }
-              onKeyDown={
-                handleSearchKeyDown
-              }
+              onChange={handleSearchChange}
+              onFocus={handleSearchFocus}
+              onKeyDown={handleSearchKeyDown}
               autoComplete="off"
               sx={{
                 "& .MuiOutlinedInput-root": {
                   height: 34,
-
                   bgcolor: "#22272b",
-
-                  color:
-                    C.textStrong,
-
-                  borderRadius:
-                    "3px",
-
+                  color: C.textStrong,
+                  borderRadius: "3px",
                   pl: 1.25,
 
                   "& fieldset": {
-                    borderColor:
-                      "#738496",
+                    borderColor: "#738496",
                   },
 
                   "&:hover fieldset": {
-                    borderColor:
-                      C.text,
+                    borderColor: C.text,
                   },
 
                   "&.Mui-focused": {
@@ -802,280 +548,143 @@ function Navbar({
                   },
 
                   "&.Mui-focused fieldset": {
-                    borderColor:
-                      C.blue,
-
+                    borderColor: C.blue,
                     borderWidth: 2,
                   },
                 },
 
                 "& input": {
-                  color:
-                    C.textStrong,
-
+                  color: C.textStrong,
                   fontSize: 14,
-
-                  p:
-                    "0 8px 0 0",
+                  p: "0 8px 0 0",
                 },
 
                 "& input::placeholder": {
                   color: C.text,
-
                   opacity: 1,
                 },
               }}
               slotProps={{
                 input: {
                   startAdornment: (
-                    <InputAdornment
-                      position="start"
-                      sx={{
-                        mr: 0.75,
-                      }}
-                    >
-                      <SearchIcon
-                        sx={{
-                          color: C.text,
-
-                          fontSize: 18,
-                        }}
-                      />
+                    <InputAdornment position="start" sx={{ mr: 0.75 }}>
+                      <SearchIcon sx={{ color: C.text, fontSize: 18 }} />
                     </InputAdornment>
                   ),
                 },
               }}
             />
 
-            {/* =================================================
-                SEARCH RESULTS
+            {/* SEARCH RESULTS */}
 
-                IMPORTANT:
-                No MenuItem here.
-                Using Box prevents the
-                MenuListContext crash.
-            ================================================= */}
-
-            {searchOpen &&
-              query.trim() && (
-                <ClickAwayListener
-                  onClickAway={() => {
-                    setSearchOpen(
-                      false
-                    );
+            {searchOpen && query.trim() && (
+              <ClickAwayListener onClickAway={() => setSearchOpen(false)}>
+                <Paper
+                  elevation={8}
+                  sx={{
+                    position: "absolute",
+                    top: 40,
+                    left: 0,
+                    right: 0,
+                    zIndex: 1500,
+                    bgcolor: C.menuBg,
+                    color: C.text,
+                    border: `1px solid ${C.border}`,
+                    borderRadius: "8px",
+                    boxShadow: "0 8px 20px rgba(0,0,0,0.4)",
+                    maxHeight: 360,
+                    overflowY: "auto",
                   }}
                 >
-                  <Paper
-                    elevation={8}
-                    sx={{
-                      position:
-                        "absolute",
+                  {results.length === 0 ? (
+                    <Box sx={{ p: 2 }}>
+                      <Typography sx={{ fontSize: 14, color: C.muted }}>
+                        No boards found
+                      </Typography>
 
-                      top: 40,
-
-                      left: 0,
-
-                      right: 0,
-
-                      zIndex: 1500,
-
-                      bgcolor:
-                        C.menuBg,
-
-                      color: C.text,
-
-                      border:
-                        `1px solid ${C.border}`,
-
-                      borderRadius:
-                        "8px",
-
-                      overflow:
-                        "hidden",
-
-                      boxShadow:
-                        "0 8px 20px rgba(0,0,0,0.4)",
-
-                      maxHeight: 360,
-
-                      overflowY:
-                        "auto",
-                    }}
-                  >
-                    {/* NO RESULTS */}
-
-                    {results.length ===
-                    0 ? (
+                      <Typography
+                        sx={{ fontSize: 12, color: C.muted, mt: 0.5 }}
+                      >
+                        Try another board name.
+                      </Typography>
+                    </Box>
+                  ) : (
+                    <>
                       <Box
                         sx={{
-                          p: 2,
+                          px: 2,
+                          py: 1,
+                          borderBottom: `1px solid ${C.border}`,
                         }}
                       >
-                        <Typography
-                          sx={{
-                            fontSize: 14,
-
-                            color:
-                              C.muted,
-                          }}
-                        >
-                          No boards found
-                        </Typography>
-
-                        <Typography
-                          sx={{
-                            fontSize: 12,
-
-                            color:
-                              C.muted,
-
-                            mt: 0.5,
-                          }}
-                        >
-                          Try another
-                          board name.
+                        <Typography sx={{ fontSize: 12, color: C.muted }}>
+                          {results.length}{" "}
+                          {results.length === 1 ? "board" : "boards"} found
                         </Typography>
                       </Box>
-                    ) : (
-                      <>
-                        {/* RESULT COUNT */}
 
-                        <Box
-                          sx={{
-                            px: 2,
-
-                            py: 1,
-
-                            borderBottom:
-                              `1px solid ${C.border}`,
-                          }}
-                        >
-                          <Typography
-                            sx={{
-                              fontSize: 12,
-
-                              color:
-                                C.muted,
-                            }}
-                          >
-                            {results.length}{" "}
-                            {results.length ===
-                            1
-                              ? "board"
-                              : "boards"}{" "}
-                            found
-                          </Typography>
-                        </Box>
-
-                        {/* BOARD RESULTS */}
-
-                        {results.map(
-                          renderBoard
-                        )}
-                      </>
-                    )}
-                  </Paper>
-                </ClickAwayListener>
-              )}
+                      {results.map(renderBoard)}
+                    </>
+                  )}
+                </Paper>
+              </ClickAwayListener>
+            )}
           </Box>
 
-          {/* =================================================
-              CREATE
-          ================================================= */}
+          {/* CREATE */}
 
           <Button
-            onClick={() =>
-              setCreateOpen(true)
-            }
-            startIcon={
-              <AddIcon />
-            }
+            onClick={() => setCreateOpen(true)}
+            startIcon={<AddIcon />}
             sx={{
-              display: {
-                xs: "none",
-                md: "inline-flex",
-              },
-
+              display: { xs: "none", md: "inline-flex" },
               flexShrink: 0,
-
               height: 32,
-
               px: 1.5,
-
               minWidth: 0,
-
               bgcolor: C.blue,
-
               color: "#1d2125",
-
-              textTransform:
-                "none",
-
+              textTransform: "none",
               fontSize: 14,
-
               fontWeight: 500,
-
               borderRadius: "3px",
-
               boxShadow: "none",
 
               "&:hover": {
-                bgcolor:
-                  C.blueHover,
-
-                boxShadow:
-                  "none",
+                bgcolor: C.blueHover,
+                boxShadow: "none",
               },
             }}
           >
             Create
           </Button>
 
-          {/* =================================================
-              MOBILE CREATE
-          ================================================= */}
+          {/* MOBILE CREATE */}
 
           <IconButton
             aria-label="create"
-            onClick={() =>
-              setCreateOpen(true)
-            }
+            onClick={() => setCreateOpen(true)}
             sx={{
               ...iconBtnSx,
-
-              display: {
-                xs: "inline-flex",
-                md: "none",
-              },
-
+              display: { xs: "inline-flex", md: "none" },
               bgcolor: C.blue,
-
               color: "#1d2125",
 
               "&:hover": {
-                bgcolor:
-                  C.blueHover,
+                bgcolor: C.blueHover,
               },
             }}
           >
-            <AddIcon
-              fontSize="small"
-            />
+            <AddIcon fontSize="small" />
           </IconButton>
 
-          {/* =================================================
-              RIGHT ACTIONS
-          ================================================= */}
+          {/* RIGHT ACTIONS */}
 
           <Box
             sx={{
               display: "flex",
-
-              alignItems:
-                "center",
-
+              alignItems: "center",
               gap: 0.25,
-
               flexShrink: 0,
             }}
           >
@@ -1083,24 +692,13 @@ function Navbar({
 
             <IconButton
               aria-label="notifications"
-              onClick={openMenu(
-                "notifications"
-              )}
+              onClick={openMenu("notifications")}
               sx={{
                 ...iconBtnSx,
-
-                display: {
-                  xs: "none",
-                  sm: "flex",
-                },
+                display: { xs: "none", sm: "flex" },
               }}
             >
-              <Badge
-                badgeContent={
-                  unread
-                }
-                color="error"
-              >
+              <Badge badgeContent={unread} color="error">
                 <NotificationsNoneIcon />
               </Badge>
             </IconButton>
@@ -1109,16 +707,10 @@ function Navbar({
 
             <IconButton
               aria-label="help"
-              onClick={openMenu(
-                "help"
-              )}
+              onClick={openMenu("help")}
               sx={{
                 ...iconBtnSx,
-
-                display: {
-                  xs: "none",
-                  sm: "flex",
-                },
+                display: { xs: "none", sm: "flex" },
               }}
             >
               <HelpIcon />
@@ -1128,92 +720,131 @@ function Navbar({
 
             <IconButton
               aria-label="account"
-              onClick={openMenu(
-                "profile"
-              )}
-              sx={{
-                p: 0.5,
-
-                ml: 0.25,
-              }}
+              onClick={openMenu("profile")}
+              sx={{ p: 0.5, ml: 0.25 }}
             >
               <Avatar
+                alt={displayName}
                 sx={{
                   width: 28,
-
                   height: 28,
-
                   bgcolor: C.blue,
-
-                  color:
-                    "#1d2125",
-
+                  color: "#1d2125",
                   fontSize: 13,
-
                   fontWeight: 700,
                 }}
               >
-                U
+                {initial}
               </Avatar>
             </IconButton>
           </Box>
         </Toolbar>
       </AppBar>
 
-      {/* =================================================
-          HELP / PROFILE MENU
-      ================================================= */}
+      {/* ================= HELP MENU ================= */}
 
       <Menu
         anchorEl={menu.anchor}
-        open={
-          menu.id === "help" ||
-          menu.id === "profile"
-        }
+        open={menu.id === "help"}
         onClose={closeMenu}
-        PaperProps={{
-          sx: menuPaperSx,
-        }}
+        slotProps={{ paper: { sx: menuPaperSx } }}
       >
-        {(
-          SIMPLE_MENUS[
-            menu.id as keyof typeof SIMPLE_MENUS
-          ] || []
-        ).map((label) => (
-          <MenuItem
-            key={label}
-            onClick={() =>
-              pickSimple(label)
-            }
-          >
+        {HELP_MENU.map((label) => (
+          <MenuItem key={label} onClick={() => pickSimple(label)}>
             {label}
           </MenuItem>
         ))}
       </Menu>
 
-      {/* =================================================
-          APP SWITCHER
-      ================================================= */}
+      {/* ================= PROFILE MENU ================= */}
 
       <Menu
         anchorEl={menu.anchor}
-        open={
-          menu.id === "apps"
-        }
+        open={menu.id === "profile"}
         onClose={closeMenu}
-        PaperProps={{
-          sx: {
-            ...menuPaperSx,
+        slotProps={{ paper: { sx: menuPaperSx } }}
+      >
+        <Box sx={{ px: 2, py: 1.5 }}>
+          <Typography
+            sx={{ color: C.muted, fontSize: 11, letterSpacing: 0.5, mb: 1 }}
+          >
+            ACCOUNT
+          </Typography>
 
-            minWidth: 220,
-          },
-        }}
+          <Box sx={{ display: "flex", gap: 1.5, alignItems: "center" }}>
+            <Avatar
+              sx={{
+                width: 44,
+                height: 44,
+                bgcolor: C.blue,
+                color: "#1d2125",
+                fontWeight: 700,
+              }}
+            >
+              {initial}
+            </Avatar>
+
+            <Box sx={{ minWidth: 0 }}>
+              <Typography
+                noWrap
+                sx={{ color: "#fff", fontWeight: 700, fontSize: 15 }}
+              >
+                {user?.name || "User"}
+              </Typography>
+
+              <Typography noWrap sx={{ color: C.muted, fontSize: 13 }}>
+                {user?.email}
+              </Typography>
+            </Box>
+          </Box>
+
+          <Box
+            sx={{
+              display: "flex",
+              justifyContent: "space-between",
+              mt: 1.5,
+              fontSize: 13,
+            }}
+          >
+            <span style={{ color: C.muted }}>Plan</span>
+            <span style={{ color: "#fff" }}>Free plan</span>
+          </Box>
+        </Box>
+
+        <Divider />
+
+        <MenuItem
+          onClick={() => {
+            closeMenu();
+            navigate("/settings");
+          }}
+        >
+          <ListItemIcon sx={{ color: "inherit", minWidth: 32 }}>
+            <SettingsOutlinedIcon fontSize="small" />
+          </ListItemIcon>
+          Settings
+        </MenuItem>
+
+        <MenuItem onClick={handleLogout}>
+          <ListItemIcon sx={{ color: "inherit", minWidth: 32 }}>
+            <LogoutIcon fontSize="small" />
+          </ListItemIcon>
+          Log out
+        </MenuItem>
+      </Menu>
+
+      {/* ================= APP SWITCHER ================= */}
+
+      <Menu
+        anchorEl={menu.anchor}
+        open={menu.id === "apps"}
+        onClose={closeMenu}
+        slotProps={{ paper: { sx: { ...menuPaperSx, minWidth: 220 } } }}
       >
         <MenuItem
           onClick={() => {
             closeMenu();
-
-            navigate("/");
+            navigate("/dashboard");
           }}
         >
           Boards
@@ -1222,87 +853,43 @@ function Navbar({
         <MenuItem
           onClick={() => {
             closeMenu();
-
-            navigate(
-              "/templates"
-            );
+            navigate("/templates");
           }}
         >
           Templates
         </MenuItem>
       </Menu>
 
-      {/* =================================================
-          NOTIFICATIONS
-      ================================================= */}
+      {/* ================= NOTIFICATIONS ================= */}
 
       <Menu
         anchorEl={menu.anchor}
-        open={
-          menu.id ===
-          "notifications"
-        }
+        open={menu.id === "notifications"}
         onClose={closeMenu}
-        PaperProps={{
-          sx: {
-            ...menuPaperSx,
-
-            width: 340,
-          },
-        }}
+        slotProps={{ paper: { sx: { ...menuPaperSx, width: 340 } } }}
       >
-        {/* HEADER */}
-
         <Box
           sx={{
             display: "flex",
-
-            justifyContent:
-              "space-between",
-
-            alignItems:
-              "center",
-
+            justifyContent: "space-between",
+            alignItems: "center",
             px: 2,
-
             py: 0.5,
           }}
         >
-          <Typography
-            sx={{
-              fontWeight: 700,
-
-              color: "#fff",
-
-              fontSize: 15,
-            }}
-          >
+          <Typography sx={{ fontWeight: 700, color: "#fff", fontSize: 15 }}>
             Notifications
           </Typography>
 
           <Button
             size="small"
-            disabled={
-              unread === 0
-            }
+            disabled={unread === 0}
             onClick={() =>
-              setNotifications(
-                (list) =>
-                  list.map(
-                    (item) => ({
-                      ...item,
-
-                      read: true,
-                    })
-                  )
+              setNotifications((list) =>
+                list.map((item) => ({ ...item, read: true }))
               )
             }
-            sx={{
-              textTransform:
-                "none",
-
-              color: C.blue,
-            }}
+            sx={{ textTransform: "none", color: C.blue }}
           >
             Mark all as read
           </Button>
@@ -1310,102 +897,58 @@ function Navbar({
 
         <Divider />
 
-        {/* NOTIFICATIONS */}
-
-        {notifications.map(
-          (notification) => (
-            <MenuItem
-              key={
-                notification.id
-              }
-              onClick={() =>
-                setNotifications(
-                  (list) =>
-                    list.map(
-                      (item) =>
-                        item.id ===
-                        notification.id
-                          ? {
-                              ...item,
-
-                              read: true,
-                            }
-                          : item
-                    )
+        {notifications.map((notification) => (
+          <MenuItem
+            key={notification.id}
+            onClick={() =>
+              setNotifications((list) =>
+                list.map((item) =>
+                  item.id === notification.id ? { ...item, read: true } : item
                 )
-              }
+              )
+            }
+            sx={{
+              whiteSpace: "normal",
+              alignItems: "flex-start",
+              gap: 1.25,
+              py: 1.25,
+            }}
+          >
+            <Box
               sx={{
-                whiteSpace:
-                  "normal",
+                width: 8,
+                height: 8,
+                mt: 0.75,
+                flexShrink: 0,
+                borderRadius: "50%",
+                bgcolor: notification.read ? "transparent" : C.blue,
+              }}
+            />
 
-                alignItems:
-                  "flex-start",
-
-                gap: 1.25,
-
-                py: 1.25,
+            <Typography
+              sx={{
+                fontSize: 14,
+                color: notification.read ? C.muted : "#fff",
               }}
             >
-              <Box
-                sx={{
-                  width: 8,
-
-                  height: 8,
-
-                  mt: 0.75,
-
-                  flexShrink: 0,
-
-                  borderRadius:
-                    "50%",
-
-                  bgcolor:
-                    notification.read
-                      ? "transparent"
-                      : C.blue,
-                }}
-              />
-
-              <Typography
-                sx={{
-                  fontSize: 14,
-
-                  color:
-                    notification.read
-                      ? C.muted
-                      : "#fff",
-                }}
-              >
-                {
-                  notification.text
-                }
-              </Typography>
-            </MenuItem>
-          )
-        )}
+              {notification.text}
+            </Typography>
+          </MenuItem>
+        ))}
       </Menu>
 
-      {/* =================================================
-          CREATE BOARD DIALOG
-      ================================================= */}
+      {/* ================= CREATE BOARD DIALOG ================= */}
 
       <Dialog
         open={createOpen}
         onClose={() => {
           setCreateOpen(false);
-
           setNewName("");
         }}
         fullWidth
         maxWidth="xs"
       >
-        <DialogTitle
-          sx={{
-            fontWeight: 700,
-          }}
-        >
-          Create board
-        </DialogTitle>
+        <DialogTitle sx={{ fontWeight: 700 }}>Create board</DialogTitle>
 
         <DialogContent>
           <TextField
@@ -1415,86 +958,51 @@ function Navbar({
             label="Board title"
             placeholder="Enter board name..."
             value={newName}
-            onChange={(event) =>
-              setNewName(
-                event.target.value
-              )
-            }
+            onChange={(event) => setNewName(event.target.value)}
             onKeyDown={(event) => {
-              if (
-                event.key ===
-                  "Enter" &&
-                newName.trim()
-              ) {
+              if (event.key === "Enter" && newName.trim()) {
                 event.preventDefault();
-
                 submitCreate();
-
                 return;
               }
 
-              if (
-                event.key ===
-                "Escape"
-              ) {
-                setCreateOpen(
-                  false
-                );
-
+              if (event.key === "Escape") {
+                setCreateOpen(false);
                 setNewName("");
               }
             }}
-            sx={{
-              mt: 1,
-            }}
+            sx={{ mt: 1 }}
           />
         </DialogContent>
 
         <DialogActions>
           <Button
             onClick={() => {
-              setCreateOpen(
-                false
-              );
-
+              setCreateOpen(false);
               setNewName("");
             }}
-            sx={{
-              textTransform:
-                "none",
-            }}
+            sx={{ textTransform: "none" }}
           >
             Cancel
           </Button>
 
           <Button
             variant="contained"
-            onClick={
-              submitCreate
-            }
-            disabled={
-              !newName.trim()
-            }
-            sx={{
-              textTransform:
-                "none",
-            }}
+            onClick={submitCreate}
+            disabled={!newName.trim()}
+            sx={{ textTransform: "none" }}
           >
             Create
           </Button>
         </DialogActions>
       </Dialog>
 
-      {/* =================================================
-          TOAST
-      ================================================= */}
+      {/* ================= TOAST ================= */}
 
       <Snackbar
         open={Boolean(toast)}
         autoHideDuration={2000}
-        onClose={() =>
-          setToast("")
-        }
+        onClose={() => setToast("")}
         message={toast}
       />
     </>

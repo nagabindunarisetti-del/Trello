@@ -12,10 +12,6 @@ function Card({
     card.title
   );
 
-  // =========================
-  // SAVE EDIT
-  // =========================
-
   const saveEdit = () => {
     if (editTitle.trim() === "") {
       return;
@@ -29,10 +25,6 @@ function Card({
 
     setIsEditing(false);
   };
-
-  // =========================
-  // CANCEL EDIT
-  // =========================
 
   const cancelEdit = () => {
     setEditTitle(card.title);

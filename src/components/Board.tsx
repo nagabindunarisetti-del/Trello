@@ -39,18 +39,11 @@ function Board() {
     },
   ]);
 
-  // Which list is currently adding a card
   const [addingCardToList, setAddingCardToList] = useState(null);
 
-  // New card text
   const [newCardTitle, setNewCardTitle] = useState("");
 
-  // Delete confirmation popup
   const [deleteCardData, setDeleteCardData] = useState(null);
-
-  // =========================
-  // ADD LIST
-  // =========================
 
   const addList = () => {
     const newList = {
@@ -62,27 +55,16 @@ function Board() {
     setLists([...lists, newList]);
   };
 
-  // =========================
-  // START ADD CARD
-  // =========================
-
   const startAddingCard = (listId) => {
     setAddingCardToList(listId);
     setNewCardTitle("");
   };
 
-  // =========================
-  // CANCEL ADD CARD
-  // =========================
 
   const cancelAddingCard = () => {
     setAddingCardToList(null);
     setNewCardTitle("");
   };
-
-  // =========================
-  // SAVE NEW CARD
-  // =========================
 
   const saveCard = (listId) => {
     if (newCardTitle.trim() === "") {
@@ -111,10 +93,6 @@ function Board() {
     setAddingCardToList(null);
   };
 
-  // =========================
-  // DELETE CARD
-  // =========================
-
   const requestDeleteCard = (listId, cardId, cardTitle) => {
     setDeleteCardData({
       listId,
@@ -123,9 +101,6 @@ function Board() {
     });
   };
 
-  // =========================
-  // CONFIRM DELETE
-  // =========================
 
   const confirmDeleteCard = () => {
     if (!deleteCardData) {
@@ -152,17 +127,10 @@ function Board() {
     setDeleteCardData(null);
   };
 
-  // =========================
-  // CANCEL DELETE
-  // =========================
-
   const cancelDeleteCard = () => {
     setDeleteCardData(null);
   };
 
-  // =========================
-  // EDIT CARD
-  // =========================
 
   const editCard = (listId, cardId, newTitle) => {
     if (newTitle.trim() === "") {
@@ -192,10 +160,6 @@ function Board() {
       })
     );
   };
-
-  // =========================
-  // DELETE LIST
-  // =========================
 
   const deleteList = (listId) => {
     setLists(
