@@ -74,8 +74,6 @@ type ChecklistItem = { id: number; text: string; done: boolean };
 
 type Checklist = { id: number; title: string; items: ChecklistItem[] };
 
-/* An attachment is either a pasted link or an uploaded file.
-   Uploaded files are stored as a data URL so they survive a refresh. */
 type AttachmentItem = {
   id: number;
   name: string;
@@ -263,8 +261,6 @@ const darkFieldSx = {
   },
   "& input[type='date']": { colorScheme: "dark" },
 } satisfies SxProps<Theme>;
-
-/* ---- card dialog (white side): dark, high-contrast text ---- */
 const L_TEXT = "#0B1220";
 const L_MUTED = "#334155";
 
@@ -675,15 +671,48 @@ function BoardPage() {
 
   const selectedList = lists.find((list) => list.id === selectedListId);
 
-  /* everybody who is on any card (used by the members popover) */
+  /* board-level list of everyone who can be added to cards */
+  const roster: string[] =
+    (board as unknown as { memberRoster?: string[] } | null)?.memberRoster || [];
+
+  const saveRoster = (next: string[]) => {
+    const current = boardRef.current;
+    if (!current) return;
+
+    const updated = { ...current, memberRoster: next } as BoardItem;
+    boardRef.current = updated;
+    setBoard(updated);
+    saveBoards(getBoards().map((item) => (item.id === updated.id ? updated : item)));
+  };
+
+  /* everybody on the board: roster + anyone already on a card (used by the members popover) */
   const memberPool = Array.from(
     new Set([
       CURRENT_USER,
+      ...roster,
       ...lists.flatMap((list) =>
         list.cards.flatMap((card) => card.members || [])
       ),
     ])
   );
+
+  /* remove a person from the whole board (roster + every card) */
+  const deleteMemberFromBoard = (name: string) => {
+    if (name === CURRENT_USER) return;
+
+    saveRoster(roster.filter((item) => item !== name));
+    commit((current) =>
+      current.map((list) => ({
+        ...list,
+        cards: list.cards.map((card) =>
+          (card.members || []).includes(name)
+            ? { ...card, members: (card.members || []).filter((m) => m !== name) }
+            : card
+        ),
+      }))
+    );
+    notify(`${name} removed from board`);
+  };
 
   /* custom labels created on any card, so they stay selectable after being replaced */
   const customLabelPool: LabelItem[] = (() => {
@@ -995,7 +1024,6 @@ function BoardPage() {
     );
 
     setNewCardTitle("");
-    /* form stays open so several cards can be added quickly */
   };
 
   const handleCancelAddCard = () => {
@@ -1158,10 +1186,6 @@ function BoardPage() {
       ...c,
       comments: (c.comments || []).filter((item) => item.id !== commentId),
     }));
-
-  /* labels
-     A card holds ONE label. Clicking another label replaces the current one.
-     Clicking the label that is already on the card removes it. */
   const selectLabel = (cardId: number, label: LabelItem) =>
     updateCard(cardId, (c) => {
       const current = c.labels || [];
@@ -1208,6 +1232,10 @@ function BoardPage() {
   const addMemberByName = (cardId: number) => {
     const name = memberName.trim();
     if (!name) return;
+
+    if (name !== CURRENT_USER && !roster.includes(name)) {
+      saveRoster([...roster, name]);
+    }
 
     const current = findCard(cardId)?.card.members || [];
     if (!current.includes(name)) toggleMember(cardId, name);
@@ -1300,9 +1328,6 @@ function BoardPage() {
     setItemDraft("");
   };
 
-  /* attachments */
-
-  /* attach a pasted link */
   const addAttachment = (cardId: number) => {
     const raw = attachUrl.trim();
     if (!raw) return;
@@ -1325,7 +1350,6 @@ function BoardPage() {
     setPopover(null);
   };
 
-  /* attach one or more files from the user's computer */
   const addFiles = async (cardId: number, fileList: FileList | null) => {
     if (!fileList || fileList.length === 0) return;
 
@@ -1374,7 +1398,6 @@ function BoardPage() {
   const handleFileInput = (cardId: number, event: ChangeEvent<HTMLInputElement>) => {
     const input = event.target;
     void addFiles(cardId, input.files);
-    /* reset so the same file can be picked again */
     input.value = "";
   };
 
@@ -1385,10 +1408,6 @@ function BoardPage() {
         (item) => item.id !== attachmentId
       ),
     }));
-
-  /* ============================================================
-   *  POPOVER / QUICK EDIT CONTROL
-   * ============================================================ */
 
   const openPopover = (
     kind: PopoverKind,
@@ -1436,10 +1455,6 @@ function BoardPage() {
     }
     setQuickEdit(null);
   };
-
-  /* ============================================================
-   *  RENDER HELPERS
-   * ============================================================ */
 
   const renderBadges = (card: CardItem) => {
     const tone = dueTone(card);
@@ -1561,8 +1576,6 @@ function BoardPage() {
         ))}
       </Box>
     );
-
-  /* ---------- popover bodies ---------- */
   const renderPopoverBody = () => {
     if (!popover) return null;
 
@@ -1745,8 +1758,24 @@ function BoardPage() {
                 >
                   <MemberAvatar name={name} size={26} />
                   <Box sx={{ flex: 1 }}>{name}</Box>
+
                   {cardMembers.includes(name) && (
                     <CheckIcon sx={{ fontSize: 18 }} />
+                  )}
+
+                  {name !== CURRENT_USER && (
+                    <Tooltip title="Delete person from board">
+                      <IconButton
+                        size="small"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          deleteMemberFromBoard(name);
+                        }}
+                        sx={{ color: "#F87168", width: 26, height: 26 }}
+                      >
+                        <DeleteIcon sx={{ fontSize: 16 }} />
+                      </IconButton>
+                    </Tooltip>
                   )}
                 </Box>
               ))}
@@ -2165,7 +2194,6 @@ function BoardPage() {
   const QUICK_MENU_WIDTH = 220;
   const QUICK_ITEM_HEIGHT = 46;
 
-  /* ---------- card detail modal data ---------- */
   const openData = findCard(openCardId);
   const openCard = openData?.card;
 
@@ -2228,10 +2256,6 @@ function BoardPage() {
     );
   }
 
-  /* ============================================================
-   *  JSX
-   * ============================================================ */
-
   return (
     <Box
       sx={{
@@ -2243,7 +2267,6 @@ function BoardPage() {
         overflow: "hidden",
       }}
     >
-      {/* ========================= HEADER ========================= */}
       <Box
         sx={{
           flexShrink: 0,
@@ -2349,7 +2372,6 @@ function BoardPage() {
         </Button>
       </Box>
 
-      {/* ========================= BOARD CONTENT ========================= */}
       <Box
         sx={{
           flex: 1,
@@ -3594,7 +3616,34 @@ function BoardPage() {
                   </Typography>
                   <Box sx={{ display: "flex", alignItems: "center", gap: 0.75, flexWrap: "wrap" }}>
                     {(openCard.members || []).map((name) => (
-                      <MemberAvatar key={name} name={name} size={34} />
+                      <Box
+                        key={name}
+                        sx={{
+                          position: "relative",
+                          "& .member-remove": { opacity: 0 },
+                          "&:hover .member-remove": { opacity: 1 },
+                        }}
+                      >
+                        <MemberAvatar name={name} size={34} />
+                        <IconButton
+                          className="member-remove"
+                          size="small"
+                          onClick={() => toggleMember(openCard.id, name)}
+                          sx={{
+                            position: "absolute",
+                            top: -6,
+                            right: -6,
+                            width: 16,
+                            height: 16,
+                            color: "#fff",
+                            backgroundColor: "#172B4D",
+                            transition: "opacity .12s ease",
+                            "&:hover": { backgroundColor: "#DC2626" },
+                          }}
+                        >
+                          <CloseIcon sx={{ fontSize: 11 }} />
+                        </IconButton>
+                      </Box>
                     ))}
                     <IconButton
                       onClick={(event) =>
@@ -4150,8 +4199,6 @@ function BoardPage() {
           </>
         )}
       </Dialog>
-
-      {/* ========================= POPOVER (labels, members, dates ...) ========================= */}
       <Popover
         open={Boolean(popover)}
         anchorEl={popover?.anchor}
@@ -4184,7 +4231,6 @@ function BoardPage() {
         </Box>
       </Popover>
 
-      {/* ========================= ARCHIVED CARDS ========================= */}
       <Dialog
         open={archiveOpen}
         onClose={() => setArchiveOpen(false)}
@@ -4303,7 +4349,7 @@ function BoardPage() {
         </DialogActions>
       </Dialog>
 
-      {/* ========================= SNACKBAR (with Undo when available) ========================= */}
+    
       <Snackbar
         open={Boolean(snack)}
         autoHideDuration={4000}

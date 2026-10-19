@@ -105,9 +105,6 @@ function Sidebar() {
           },
         }}
       >
-        {/* ======================================
-            PERSONAL SETTINGS
-        ====================================== */}
 
         <Typography
           sx={{
@@ -172,10 +169,6 @@ function Sidebar() {
           />
         </List>
 
-        {/* ======================================
-            DIVIDER
-        ====================================== */}
-
         <Divider
           sx={{
             borderColor: "#363638",
@@ -183,10 +176,6 @@ function Sidebar() {
             my: 2.5,
           }}
         />
-
-        {/* ======================================
-            WORKSPACE
-        ====================================== */}
 
         <Typography
           sx={{
@@ -203,11 +192,6 @@ function Sidebar() {
         >
           Workspace
         </Typography>
-
-        {/* ======================================
-            WORKSPACE NAME
-        ====================================== */}
-
         <Box
           sx={{
             display: "flex",
@@ -252,10 +236,6 @@ function Sidebar() {
             TaskFlow Workspace
           </Typography>
         </Box>
-
-        {/* ======================================
-            WORKSPACE MENU
-        ====================================== */}
 
         <List disablePadding>
           {/* BOARDS */}
@@ -331,10 +311,6 @@ function Sidebar() {
     </Drawer>
   );
 }
-
-/* =========================================
-   SIDEBAR ITEM
-========================================= */
 
 interface SidebarItemProps {
   icon: ReactNode;

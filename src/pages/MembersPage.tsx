@@ -35,19 +35,10 @@ import LinkIcon from "@mui/icons-material/Link";
 import { getBoards } from "../utils/boardStorage";
 import type { Member, JoinRequest } from "../types/member";
 
-/* ============================================================
- *  CONSTANTS
- * ============================================================ */
-
 const MEMBERS_STORAGE_KEY = "trello_members";
 const REQUESTS_STORAGE_KEY = "trello_join_requests";
-
-/* Matches the seed user used on the board page, so "You" lines up
-   with whoever is actually acting in this workspace. */
 const CURRENT_USER_ID = 1;
 
-/* Unique ids: Date.now() alone collides when two rows are created
-   in the same millisecond (invite + approve in quick succession). */
 const uid = () => Date.now() * 1000 + Math.floor(Math.random() * 1000);
 
 const AVATAR_COLORS = ["#579DFF", "#9F8FEF", "#4BCE97", "#F5CD47", "#F87168", "#60C6D2"];
@@ -87,8 +78,6 @@ const defaultMembers: Member[] = [
 
 const defaultRequests: JoinRequest[] = [];
 
-/* Fallback board list, used only if the workspace has no real boards yet
-   (so the "Boards" menu is never completely empty). */
 const FALLBACK_BOARDS: { id: number; title: string }[] = [
   { id: 1, title: "Board 1" },
 ];
@@ -116,8 +105,6 @@ export default function MembersPage() {
     return defaultRequests;
   });
 
-  /* Real boards from this workspace, so the Boards menu and access
-     counts reflect boards that actually exist rather than a hardcoded list. */
   const [availableBoards, setAvailableBoards] = useState<
     { id: number; title: string }[]
   >(FALLBACK_BOARDS);
@@ -179,8 +166,6 @@ export default function MembersPage() {
     severity: "success" | "error" | "info" = "success"
   ) => setSnackbar({ open: true, message, severity });
 
-  /* Trello never lets a workspace drop to zero Admins, so role changes
-     and removals that would do that are blocked with an explanation. */
   const adminCount = useMemo(
     () => members.filter((member) => member.role === "Admin").length,
     [members]
@@ -289,9 +274,6 @@ export default function MembersPage() {
     }
   };
 
-  /* ============================================================
-   *  ROLE MENU
-   * ============================================================ */
 
   const openRoleMenu = (event: MouseEvent<HTMLElement>, member: Member) => {
     setRoleAnchor(event.currentTarget);
@@ -327,10 +309,6 @@ export default function MembersPage() {
     showMessage(`Role changed to ${role}.`);
   };
 
-  /* ============================================================
-   *  BOARD ACCESS MENU
-   * ============================================================ */
-
   const openBoardMenu = (event: MouseEvent<HTMLElement>, member: Member) => {
     setBoardAnchor(event.currentTarget);
     setBoardMember(member);
@@ -364,9 +342,6 @@ export default function MembersPage() {
     showMessage("Board access updated.");
   };
 
-  /* ============================================================
-   *  DELETE MEMBER
-   * ============================================================ */
 
   const openDeleteDialog = (member: Member) => {
     if (member.id === CURRENT_USER_ID) {
@@ -402,10 +377,6 @@ export default function MembersPage() {
     closeDeleteDialog();
   };
 
-  /* ============================================================
-   *  JOIN REQUESTS
-   * ============================================================ */
-
   const approveRequest = (request: JoinRequest) => {
     const newMember: Member = {
       id: uid(),
@@ -429,10 +400,6 @@ export default function MembersPage() {
     setRequests((previous) => previous.filter((request) => request.id !== requestId));
     showMessage("Join request rejected.", "info");
   };
-
-  /* ============================================================
-   *  JSX
-   * ============================================================ */
 
   return (
     <Box

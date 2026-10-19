@@ -30,7 +30,6 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(() => getCurrentUser());
 
-  // Keep multiple browser tabs in sync (login/logout in one tab updates others)
   useEffect(() => {
     const sync = () => setUser(getCurrentUser());
     window.addEventListener("storage", sync);
@@ -67,7 +66,6 @@ export function useAuth() {
   return ctx;
 }
 
-/** Wrap pages that need a logged-in user. */
 export function ProtectedRoute({ children }: { children: ReactNode }) {
   const { user } = useAuth();
   const location = useLocation();

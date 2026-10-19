@@ -13,12 +13,10 @@ function Login() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  // Where to go after login (the page they tried to open, or dashboard)
   const redirectTo =
     (location.state as { from?: { pathname: string } } | null)?.from
       ?.pathname || "/dashboard";
 
-  // Already logged in? Skip the login page.
   if (user) {
     return <Navigate to="/dashboard" replace />;
   }

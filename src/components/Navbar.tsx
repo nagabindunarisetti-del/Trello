@@ -49,10 +49,6 @@ import { useAuth } from "./AuthContext";
 
 import type { BoardItem } from "../types/board";
 
-/* =====================================================
-   THEME
-===================================================== */
-
 const C = {
   bar: "#1d2125",
   border: "#3d4750",
@@ -67,23 +63,14 @@ const C = {
   star: "#f5cd47",
 };
 
-/* =====================================================
-   HELPERS
-===================================================== */
 
 const getName = (board: BoardItem) => board.title || "Untitled board";
 
 const isStarred = (board: BoardItem) => Boolean(board.starred);
 
-/* =====================================================
-   MENUS
-===================================================== */
 
 const HELP_MENU = ["Getting started", "Keyboard shortcuts", "Contact support"];
 
-/* =====================================================
-   STYLES
-===================================================== */
 
 const iconBtnSx = {
   color: C.text,
@@ -128,21 +115,15 @@ interface NavbarProps {
   onSelect?: (label: string) => void;
 }
 
-/* =====================================================
-   NAVBAR
-===================================================== */
-
 function Navbar({ onOpenBoard, onSelect = () => {} }: NavbarProps) {
   const navigate = useNavigate();
 
-  /* ---------- AUTH / PROFILE ---------- */
 
   const { user, logout } = useAuth();
 
   const displayName = user?.name || user?.email || "User";
   const initial = displayName.charAt(0).toUpperCase();
 
-  /* ---------- MENU STATE ---------- */
 
   const [menu, setMenu] = useState<{
     id: string | null;
@@ -152,34 +133,27 @@ function Navbar({ onOpenBoard, onSelect = () => {} }: NavbarProps) {
     anchor: null,
   });
 
-  /* ---------- SEARCH STATE ---------- */
 
   const [query, setQuery] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
   const searchRef = useRef<HTMLDivElement | null>(null);
 
-  /* ---------- BOARDS STATE ---------- */
 
   const [boards, setBoards] = useState<BoardItem[]>([]);
 
-  /* ---------- CREATE BOARD STATE ---------- */
+  
 
   const [createOpen, setCreateOpen] = useState(false);
   const [newName, setNewName] = useState("");
 
-  /* ---------- TOAST ---------- */
 
   const [toast, setToast] = useState("");
-
-  /* ---------- NOTIFICATIONS ---------- */
 
   const [notifications, setNotifications] = useState([
     { id: 1, text: 'Aisha assigned you to "Fix login bug"', read: false },
     { id: 2, text: "Sprint 24 is due tomorrow", read: false },
     { id: 3, text: 'Ravi commented on "Homepage hero"', read: false },
   ]);
-
-  /* ---------- LOAD BOARDS ---------- */
 
   useEffect(() => {
     const loadBoards = () => {
@@ -201,7 +175,7 @@ function Navbar({ onOpenBoard, onSelect = () => {} }: NavbarProps) {
     };
   }, []);
 
-  /* ---------- SEARCH RESULTS ---------- */
+ 
 
   const results = useMemo(() => {
     const searchText = query.trim().toLowerCase();
@@ -215,11 +189,9 @@ function Navbar({ onOpenBoard, onSelect = () => {} }: NavbarProps) {
     );
   }, [query, boards]);
 
-  /* ---------- UNREAD NOTIFICATIONS ---------- */
 
   const unread = notifications.filter((n) => !n.read).length;
 
-  /* ---------- MENU HANDLERS ---------- */
 
   const openMenu = (id: string) => (event: MouseEvent<HTMLElement>) => {
     setMenu({ id, anchor: event.currentTarget });
@@ -228,8 +200,6 @@ function Navbar({ onOpenBoard, onSelect = () => {} }: NavbarProps) {
   const closeMenu = () => {
     setMenu({ id: null, anchor: null });
   };
-
-  /* ---------- SEARCH HANDLERS ---------- */
 
   const handleSearchChange = (event: ChangeEvent<HTMLInputElement>) => {
     const value = event.target.value;
@@ -261,7 +231,6 @@ function Navbar({ onOpenBoard, onSelect = () => {} }: NavbarProps) {
     }
   };
 
-  /* ---------- OPEN BOARD ---------- */
 
   const handleOpenBoard = (board: BoardItem) => {
     setQuery("");
@@ -273,7 +242,6 @@ function Navbar({ onOpenBoard, onSelect = () => {} }: NavbarProps) {
     onOpenBoard?.(board);
   };
 
-  /* ---------- CREATE BOARD ---------- */
 
   const submitCreate = () => {
     const name = newName.trim();
@@ -304,8 +272,6 @@ function Navbar({ onOpenBoard, onSelect = () => {} }: NavbarProps) {
     navigate(`/board/${newBoard.id}`);
   };
 
-  /* ---------- TOGGLE STAR ---------- */
-
   const handleToggleStar = (event: MouseEvent, board: BoardItem) => {
     event.stopPropagation();
 
@@ -319,7 +285,6 @@ function Navbar({ onOpenBoard, onSelect = () => {} }: NavbarProps) {
     window.dispatchEvent(new Event("boardsUpdated"));
   };
 
-  /* ---------- HELP MENU ITEM ---------- */
 
   const pickSimple = (label: string) => {
     closeMenu();
@@ -327,16 +292,13 @@ function Navbar({ onOpenBoard, onSelect = () => {} }: NavbarProps) {
     onSelect(label);
   };
 
-  /* ---------- LOGOUT ---------- */
-
   const handleLogout = () => {
     closeMenu();
     logout();
     navigate("/", { replace: true });
   };
 
-  /* ---------- SEARCH RESULT ROW ----------
-     Box, NOT MenuItem: MenuItem can't be used outside Menu/MenuList. */
+
 
   const renderBoard = (board: BoardItem) => {
     return (
@@ -406,10 +368,6 @@ function Navbar({ onOpenBoard, onSelect = () => {} }: NavbarProps) {
       </Box>
     );
   };
-
-  /* =====================================================
-     RENDER
-  ===================================================== */
 
   return (
     <>

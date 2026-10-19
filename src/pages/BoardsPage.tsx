@@ -58,24 +58,13 @@ function BoardsPage() {
   const [newBoardName, setNewBoardName] =
     useState("");
 
-  /* =====================================================
-     LOAD BOARDS
-     ===================================================== */
-
   useEffect(() => {
     const loadBoards = () => {
       const storedBoards = getBoards();
 
       setBoards(storedBoards);
     };
-
-    // Initial load
     loadBoards();
-
-    /*
-     * Listen for board changes from Navbar
-     * or other components.
-     */
     window.addEventListener(
       "boardsUpdated",
       loadBoards
@@ -88,10 +77,6 @@ function BoardsPage() {
       );
     };
   }, []);
-
-  /* =====================================================
-     FILTER + SORT
-     ===================================================== */
 
   const filteredBoards = useMemo(() => {
     let result = boards.filter((board) =>
@@ -127,19 +112,11 @@ function BoardsPage() {
     return result;
   }, [boards, search, sortBy]);
 
-  /* =====================================================
-     OPEN BOARD
-     ===================================================== */
-
   const handleOpenBoard = (
     board: BoardItem
   ) => {
     navigate(`/board/${board.id}`);
   };
-
-  /* =====================================================
-     CREATE BOARD
-     ===================================================== */
 
   const handleCreateBoard = () => {
     if (!newBoardName.trim()) {
@@ -181,10 +158,6 @@ function BoardsPage() {
     setCreateDialog(false);
   };
 
-  /* =====================================================
-     OPEN BOARD MENU
-     ===================================================== */
-
   const handleOpenMenu = (
     event: React.MouseEvent<HTMLElement>,
     board: BoardItem
@@ -198,19 +171,11 @@ function BoardsPage() {
     setSelectedBoard(board);
   };
 
-  /* =====================================================
-     CLOSE MENU
-     ===================================================== */
-
   const handleCloseMenu = () => {
     setMenuAnchor(null);
 
     setSelectedBoard(null);
   };
-
-  /* =====================================================
-     STAR / UNSTAR
-     ===================================================== */
 
   const handleToggleStar = () => {
     if (!selectedBoard) {
@@ -230,20 +195,12 @@ function BoardsPage() {
     setBoards(updatedBoards);
 
     saveBoards(updatedBoards);
-
-    /*
-     * Tell Navbar that board data changed.
-     */
     window.dispatchEvent(
       new Event("boardsUpdated")
     );
 
     handleCloseMenu();
   };
-
-  /* =====================================================
-     DELETE BOARD
-     ===================================================== */
 
   const handleDeleteBoard = () => {
     if (!selectedBoard) {
@@ -260,9 +217,6 @@ function BoardsPage() {
 
     saveBoards(updatedBoards);
 
-    /*
-     * Tell Navbar that board data changed.
-     */
     window.dispatchEvent(
       new Event("boardsUpdated")
     );
@@ -270,9 +224,6 @@ function BoardsPage() {
     handleCloseMenu();
   };
 
-  /* =====================================================
-     PAGE
-     ===================================================== */
 
   return (
     <Box
@@ -289,9 +240,6 @@ function BoardsPage() {
         },
       }}
     >
-      {/* =================================================
-          HEADER
-      ================================================= */}
 
       <Box
         sx={{
@@ -369,9 +317,6 @@ function BoardsPage() {
         </Button>
       </Box>
 
-      {/* =================================================
-          SEARCH + SORT
-      ================================================= */}
 
       <Stack
         direction={{
@@ -462,10 +407,6 @@ function BoardsPage() {
         </TextField>
       </Stack>
 
-      {/* =================================================
-          BOARD COUNT
-      ================================================= */}
-
       <Typography
         sx={{
           fontSize: 16,
@@ -481,10 +422,6 @@ function BoardsPage() {
           filteredBoards.length
         })
       </Typography>
-
-      {/* =================================================
-          BOARD GRID
-      ================================================= */}
 
       {filteredBoards.length > 0 ? (
         <Box
@@ -720,9 +657,6 @@ function BoardsPage() {
           )}
         </Box>
       ) : (
-        /* =================================================
-           EMPTY STATE
-        ================================================= */
 
         <Box
           sx={{
@@ -807,9 +741,6 @@ function BoardsPage() {
         </Box>
       )}
 
-      {/* =================================================
-          BOARD MENU
-      ================================================= */}
 
       <Menu
         anchorEl={
@@ -865,9 +796,6 @@ function BoardsPage() {
         </MenuItem>
       </Menu>
 
-      {/* =================================================
-          CREATE BOARD DIALOG
-      ================================================= */}
 
       <Dialog
         open={createDialog}
